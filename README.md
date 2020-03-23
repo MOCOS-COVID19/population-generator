@@ -1,4 +1,4 @@
-# modelling-ncov2019
+# population-generator
 
 ## useful links:
 ### Technical stuff:
