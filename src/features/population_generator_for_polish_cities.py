@@ -1,15 +1,32 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import List, Dict, Any
 
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
+import scipy.stats
 from sklearn.preprocessing import MinMaxScaler
-from tqdm import tqdm
 
-from src.data import datasets
 from src.features import entities
-from src.features.population_generator_common import _age_gender_population, sample_from_distribution, cleanup
+from src.data import datasets
+from src.features.population_generator_common import _age_gender_population
+
+
+def get_distribution(distribution):
+    if isinstance(distribution, str):
+        return getattr(scipy.stats, distribution)
+    raise ValueError(f'Expected the name of a distribution, but got {distribution}')
+
+
+def sample_from_distribution(sample_size, distribution_name, *args, **kwargs):
+    distribution = get_distribution(distribution_name)
+    if distribution.name in scipy.stats._discrete_distns._distn_names:
+        return distribution.rvs(*args, size=sample_size, **kwargs)
+    elif distribution.name in scipy.stats._continuous_distns._distn_names:
+        return distribution.rvs(*args, size=sample_size, **kwargs)
+    raise ValueError(f'Distribution {distribution_name} is neither in continuous nor in discrete distributions')
 
 
 def generate_social_competence(sample_size, distribution_name='norm', loc=0, scale=1):
@@ -230,6 +247,28 @@ def generate_employment(data_folder, age_gender_pop):
     vector = pd.Series(data=entities.EmploymentStatus.NOT_EMPLOYED.value, index=age_gender_pop.index)
     vector.loc[employed_idx] = entities.EmploymentStatus.EMPLOYED.value
     return vector
+
+
+def _drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
+    columns = df.columns.tolist()
+    to_drop = [col for col in columns if col not in entities.columns]
+    return df.drop(columns=to_drop)
+
+
+def _age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
+    idx = df[df.age.str.len() > 2].index.tolist()
+    df.loc[idx, 'age'] = df.loc[idx].age.str.slice(0, 2).astype(int)
+    df.loc[idx, 'age'] += np.random.choice(list(range(0, 5)), size=len(idx))
+    df.age = df.age.astype(int)  # make the whole column as int
+    return df
+
+
+def _fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
+    return df[df[entities.prop_household] != -1]
+
+
+def cleanup(df: pd.DataFrame) -> pd.DataFrame:
+    return _age_range_to_age(_drop_obsolete_columns(_fix_homeless(df)))
 
 
 def generate_population(data_folder: Path, output_folder: Path, households: pd.DataFrame):
