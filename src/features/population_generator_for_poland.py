@@ -9,11 +9,31 @@ from datetime import datetime
 import numpy as np
 from tqdm import tqdm
 from xlrd import XLRDError
+import mocos_helper
 
 
 project_dir = Path(__file__).resolve().parents[2]
 poland_folder = project_dir / 'data' / 'processed' / 'poland'
 
+def transform(subpopulation_df):
+    ret = []
+    probs = []
+
+    for row in subpopulation_df.to_dict(orient='records'):
+        fem_prob = row['female_probability']
+        male_prob = 1.0 - fem_prob
+        fem_prob *= row['total_probability']
+        male_prob *= row['total_probability']
+        ret.append((row['Age'], GENDERS[0]))
+        probs.append(fem_prob)
+        ret.append((row['Age'], GENDERS[1]))
+        probs.append(male_prob)
+    return ret, probs
+
+def presample_subpop(subpopulation_df, count):
+    V, probs = transform(subpopulation_df)
+    idxes = mocos_helper.sample_with_replacement_shuffled(probs, count)
+    return [V[idx] for idx in idxes]
 
 class PopulationGenerator:
     """Generator class for Polish population. The generation process is split into voivodships, since there is
@@ -41,7 +61,13 @@ class PopulationGenerator:
         self.adults_df['total_probability'] = self.adults_df['Total'] / self.adults_df['Total'].sum()
         self.households_headcount_ac_df = self._preprocess_household_headcount_ac()
         self.number_of_households = self.households_headcount_ac_df.households.sum()
-        print(self.number_of_households)
+        presampled_households_idxes = mocos_helper.sample_with_replacement_shuffled(list(self.households_headcount_ac_df.probability), int(self.number_of_households)) # TODO: why do we resmaple households?
+        self.presampled_households = self.households_headcount_ac_df.iloc[list(presampled_households_idxes)]
+        children_needed = self.presampled_households.children.sum()
+        adults_needed = self.presampled_households.adults.sum()
+        self.presampled_children = presample_subpop(self.children_df, int(children_needed)).__iter__()
+        self.presampled_adults = presample_subpop(self.adults_df, int(adults_needed)).__iter__()
+        self.presampled_households = self.presampled_households.to_dict(orient='records').__iter__()
 
     def _preprocess_household_headcount_ac(self) -> pd.DataFrame:
         """If the household excel for a voivodship was processed already, the function reads the results from the
@@ -85,22 +111,28 @@ class PopulationGenerator:
 
     def _draw_a_household(self) -> Tuple[int, int]:
         """Randomly select a household given the probability of occurrence"""
-        idx = np.random.choice(self.households_headcount_ac_df.index.tolist(),
-                               p=self.households_headcount_ac_df['probability'])
-        row = self.households_headcount_ac_df.iloc[idx]
+        #print(self.households_headcount_ac_df)
+        #idx = np.random.choice(self.households_headcount_ac_df.index.tolist(),
+        #                       p=self.households_headcount_ac_df['probability'])
+        #print(self.households_headcount_ac_df.index)
+        row = next(self.presampled_households) #self.households_headcount_ac_df.iloc[idx]
         return int(row['children']), int(row['adults'])
 
-    def _draw_from_subpopulation(self, subpopulation: pd.DataFrame, headcount: int, household_idx: int,
+    def _draw_from_subpopulation(self, subpopulation, headcount: int, household_idx: int,
                                  current_index: int) -> Tuple[List[BasicNode], int]:
         """Randomly draw `headcount` people from `subpopulation` given the probability of age/gender combination within this
         subpopulation and lodge them together in a household given by `household_idx`. """
         nodes = []
+        #print(len(subpopulation), headcount)
+        #print(subpopulation)
 
         for _ in range(headcount):
-            idx = np.random.choice(subpopulation.index.tolist(), p=subpopulation['total_probability'])
-            row = subpopulation.iloc[idx]
-            age = row['Age']
-            gender = GENDERS[np.random.choice([0, 1], p=[row.female_probability, 1 - row.female_probability])]
+        #    print(subpopulation.index.tolist())
+        #    idx = np.random.choice(subpopulation.index.tolist(), p=subpopulation['total_probability'])
+        #    row = subpopulation.iloc[idx]
+            row = next(subpopulation)
+            age = row[0]
+            gender = row[1] #GENDERS[np.random.choice([0, 1], p=[row.female_probability, 1 - row.female_probability])]
             nodes.append(BasicNode(current_index, age, gender, household_idx))
             current_index += 1
 
@@ -110,12 +142,12 @@ class PopulationGenerator:
         List[BasicNode], int]:
         """Randomly draw `children_count` children and lodge them together in a household given by `household_idx`.
         """
-        return self._draw_from_subpopulation(self.children_df, children_count, household_idx, current_index)
+        return self._draw_from_subpopulation(self.presampled_children, children_count, household_idx, current_index)
 
     def _draw_adults(self, adults_count: int, household_idx: int, current_index: int) -> Tuple[List[BasicNode], int]:
         """Randomly draw `adults_count` adults and lodge them together in a household given by `household_idx`.
         """
-        return self._draw_from_subpopulation(self.adults_df, adults_count, household_idx, current_index)
+        return self._draw_from_subpopulation(self.presampled_adults, adults_count, household_idx, current_index)
 
     def _prepare_simulation_folder(self, simulations_folder):
         """Within the given `simulations_folder` create a voivodship folder to save population and households data. """
