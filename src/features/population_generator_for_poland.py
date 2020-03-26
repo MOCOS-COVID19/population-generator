@@ -9,10 +9,7 @@ from xlrd import XLRDError
 from src.data.datasets import *
 from src.features.entities import BasicNode
 from src.features.population_generator import PopulationGenerator
-from src.features.population_generator_common import prepare_simulations_folder
-
-project_dir = Path(__file__).resolve().parents[2]
-poland_folder = project_dir / 'data' / 'processed' / 'poland'
+from src.features.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
 
 class PolishPopulationGenerator(PopulationGenerator):
@@ -20,17 +17,14 @@ class PolishPopulationGenerator(PopulationGenerator):
     separate data on age/gender as well as on number of households within each voivodship.
     Age and gender are the latest known. The household data is the prognosis done by GUS in 2016 for the year 2020. """
 
-    def __init__(self, voivodship: Path) -> None:
+    def __init__(self, data_folder: Path, voivodship: Path) -> None:
         """Given a path to a voivodship folder, the initializer reads:
          * age/gender dataframe and splits it into children (<18 y.o.) and adults (18+)
          * households dataframe (that contains joint distribution of number of children x number of adults in a
          household. """
+        super().__init__(data_folder)
         self.voivodship = voivodship
-        self.age_gender_df = pd.read_excel(str(poland_folder / age_gender_xlsx.file_name),
-                                           sheet_name=self.voivodship.name)
-        self.age_gender_df = self.age_gender_df.astype(int)
-        self.age_gender_df['female_probability'] = self.age_gender_df.Females / \
-                                                   (self.age_gender_df.Females + self.age_gender_df.Males)
+        self.age_gender_df = get_age_gender_df(self.data_folder, self.voivodship.name)
         self.children_df = self.age_gender_df[self.age_gender_df['Age'] < 18].reset_index(drop=True)
         self.children_df['total_probability'] = self.children_df['Total'] / self.children_df['Total'].sum()
         self.adults_df = self.age_gender_df[self.age_gender_df['Age'] >= 18].reset_index(drop=True)
@@ -107,7 +101,7 @@ class PolishPopulationGenerator(PopulationGenerator):
         simulations_folder.mkdir()
         return simulations_folder
 
-    def _draw_household_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
+    def _draw_household_and_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
         children_count, adults_count = self._draw_a_household()
         children, current_index = self._draw_children(children_count, current_household_idx, current_index)
         adults, current_index = self._draw_adults(adults_count, current_household_idx, current_index)
@@ -115,13 +109,15 @@ class PolishPopulationGenerator(PopulationGenerator):
 
 
 if __name__ == '__main__':
+    project_dir = Path(__file__).resolve().parents[2]
+    poland_folder = project_dir / 'data' / 'processed' / 'poland'
     voivodships = [x for x in poland_folder.iterdir() if x.is_dir() and len(x.name) == 1]
     # TODO: consider changing to subprocesses
     next_household_index = 0
     next_person_index = 0
     poland_simulations_folder = prepare_simulations_folder()
     for i, item in enumerate(voivodships):
-        next_household_index, next_person_index = PolishPopulationGenerator(item).run(next_household_index,
-                                                                                      next_person_index,
-                                                                                      poland_simulations_folder)
-
+        next_household_index, next_person_index = PolishPopulationGenerator(poland_folder, item).run(
+            next_household_index,
+            next_person_index,
+            poland_simulations_folder)

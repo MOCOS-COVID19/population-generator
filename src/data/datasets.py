@@ -28,3 +28,9 @@ production_age = XlsxFile('production_age.xlsx', 'Sheet1')
 
 households_headcount_ac_xlsx_raw = XlsxFile('households_headcount_ac.xlsx', 'Tabl3')
 households_headcount_ac_xlsx = XlsxFile('households_headcount_ac.xlsx', 'processed')
+
+voivodship_cities_households_by_master_xlsx = XlsxFile('voivodship_cities_households_by_master.xlsx', 'House_Master')
+voivodship_cities_generations_configuration_xlsx = XlsxFile('voivodship_cities_generations_configuration.xlsx',
+                                                            'processed')
+voivodship_cities_household_family_structure_xlsx = XlsxFile('voivodship_cities_household_family_structure.xlsx',
+                                                             'processed')

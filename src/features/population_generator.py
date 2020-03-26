@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.features.entities import BasicNode, GENDERS
-from src.features.population_generator_common import nodes_to_dataframe
+from src.features.population_generator_common import nodes_to_dataframe, age_range_to_age
 
 
 class PopulationGenerator(ABC):
@@ -19,10 +19,8 @@ class PopulationGenerator(ABC):
     simulation_population_csv = 'population.csv'
     simulation_household_csv = 'household.csv'
 
-    @abstractmethod
-    def _draw_a_household(self) -> Tuple[int, int]:
-        """Randomly select a household given the probability of occurrence"""
-        raise NotImplementedError()
+    def __init__(self, data_folder: Path) -> None:
+        self.data_folder = data_folder
 
     def _draw_from_subpopulation(self, subpopulation: pd.DataFrame, headcount: int, household_idx: int,
                                  current_index: int) -> Tuple[List[BasicNode], int]:
@@ -55,6 +53,7 @@ class PopulationGenerator(ABC):
         hdf = pd.DataFrame(data={self.household_csv_houshold_index_col: list(households.keys()),
                                  self.household_csv_idx_col: list(households.values())})
         pdf = nodes_to_dataframe(nodes)
+        pdf = age_range_to_age(pdf)
         if include_header:
             pdf.to_csv(str(simulation_folder / self.simulation_population_csv), index=False)
             hdf.to_csv(str(simulation_folder / self.simulation_household_csv), index=False)
@@ -65,7 +64,7 @@ class PopulationGenerator(ABC):
                        index=False)
 
     @abstractmethod
-    def _draw_household_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
+    def _draw_household_and_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
         raise NotImplementedError()
 
     def run(self, household_start_index: Optional[int] = 0, population_start_index: Optional[int] = 0,
@@ -81,12 +80,12 @@ class PopulationGenerator(ABC):
         for idx in tqdm(range(self.number_of_households)):
             current_household_idx = idx + household_start_index
 
-            people, current_index = self._draw_household_members(current_household_idx, current_index)
+            people, current_index = self._draw_household_and_members(current_household_idx, current_index)
             nodes.extend(people)
             households[current_household_idx] = [person.idx for person in people]
 
             # Every household_batch_size households save the generated households and population and clear memory.
-            if idx % household_batch_size == 0:
+            if idx % household_batch_size == 0 and idx != 0:
                 self._save_interim_results(simulation_folder, households, nodes, idx == household_batch_size)
                 nodes = []
                 households = {}

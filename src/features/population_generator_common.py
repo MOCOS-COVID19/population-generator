@@ -1,10 +1,13 @@
 import pandas as pd
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.features import entities
+from src.data import datasets
 from pathlib import Path
 import datetime
 from datetime import datetime
 import scipy.stats
+import logging
+import numpy as np
 
 
 project_dir = Path(__file__).resolve().parents[2]
@@ -52,11 +55,7 @@ def get_distribution(distribution):
 
 def sample_from_distribution(sample_size, distribution_name, *args, **kwargs):
     distribution = get_distribution(distribution_name)
-    if distribution.name in scipy.stats._discrete_distns._distn_names:
-        return distribution.rvs(*args, size=sample_size, **kwargs)
-    elif distribution.name in scipy.stats._continuous_distns._distn_names:
-        return distribution.rvs(*args, size=sample_size, **kwargs)
-    raise ValueError(f'Distribution {distribution_name} is neither in continuous nor in discrete distributions')
+    return distribution.rvs(*args, size=sample_size, **kwargs)
 
 
 def _drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -65,7 +64,7 @@ def _drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=to_drop)
 
 
-def _age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
+def age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
     idx = df[df.age.str.len() > 2].index.tolist()
     df.loc[idx, 'age'] = df.loc[idx].age.str.slice(0, 2).astype(int)
     df.loc[idx, 'age'] += np.random.choice(list(range(0, 5)), size=len(idx))
@@ -78,4 +77,19 @@ def _fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def cleanup(df: pd.DataFrame) -> pd.DataFrame:
-    return _age_range_to_age(_drop_obsolete_columns(_fix_homeless(df)))
+    return age_range_to_age(_drop_obsolete_columns(_fix_homeless(df)))
+
+
+def get_age_gender_df(data_folder: Path, sheet_name: Optional[str] = datasets.age_gender_xlsx.sheet_name) \
+        -> pd.DataFrame:
+    age_gender_df = pd.read_excel(str(data_folder / datasets.age_gender_xlsx.file_name), sheet_name=sheet_name)
+    age_gender_df['Total'] = age_gender_df['Total'].astype(int)
+    age_gender_df['Males'] = age_gender_df['Males'].astype(int)
+    age_gender_df['Females'] = age_gender_df['Females'].astype(int)
+    try:
+        age_gender_df['Age'] = age_gender_df['Age'].astype(int)
+    except ValueError:
+        logging.warning('Age column contains invalid literal and cannot be cast to int')
+    age_gender_df['female_probability'] = age_gender_df.Females / (age_gender_df.Females + age_gender_df.Males)
+    return age_gender_df
+

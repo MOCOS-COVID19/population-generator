@@ -5,25 +5,42 @@ from openpyxl import load_workbook
 from contextlib import closing
 from src.data.datasets import *
 import numpy as np
+from xlrd import XLRDError
 
 
-def prepare_family_structure_from_voivodship(data_folder):
+def prepare_family_structure_from_voivodship(data_folder: Path) -> pd.DataFrame:
     """
     Preprocesses the family structure excel for a voivodship from pivoted to melted table for easier further processing.
     """
-    voivodship = os.path.basename(data_folder)[0]
-    voivodship_folder = os.path.join(data_folder, os.pardir, voivodship)
-    df = pd.read_excel(os.path.join(voivodship_folder, household_family_structure_xlsx.file_name),
-                       sheet_name=household_family_structure_xlsx.sheet_name)
+    if (data_folder / household_family_structure_xlsx.file_name).is_file():
+        return pd.read_excel(str(data_folder / household_family_structure_xlsx.file_name))
+
+    headcount_columns = [1, 2, 3, 4, 5, 6, 7]
+    try:
+        df = pd.read_excel(str(data_folder / voivodship_cities_household_family_structure_xlsx.file_name),
+                           sheet_name=voivodship_cities_household_family_structure_xlsx.sheet_name)
+    except XLRDError:  # sheet not found
+        df_q = pd.read_excel(str(data_folder / voivodship_cities_household_family_structure_xlsx.file_name),
+                             sheet_name='quantities')
+        df = df_q.copy()
+        for column in headcount_columns:
+            df[column] = df[column] / df[column].sum()
+
+        # FIXME: append a sheet instead of replacing it
+        with closing(pd.ExcelWriter(str(data_folder / voivodship_cities_household_family_structure_xlsx.file_name),
+                                    engine='openpyxl')) as writer:
+            df.to_excel(writer, sheet_name=voivodship_cities_household_family_structure_xlsx.sheet_name, index=False)
+
     df2 = pd.melt(df,
-                  id_vars=['family_type', 'relationship', 'house master', 'family_structure_regex'],
+                  id_vars=['family_type', 'relationship', 'house master'],
                   value_vars=[1, 2, 3, 4, 5, 6, 7], var_name='household_headcount',
-                  value_name='probability_within_headcount')
+                  value_name='probability_within_headcount').rename(columns={'house master': 'house_master'})
 
-    df2.to_excel(os.path.join(data_folder, household_family_structure_xlsx.file_name), index=False)
+    df2.to_excel(str(data_folder / household_family_structure_xlsx.file_name), index=False)
+    return df2
 
 
-def _generation_configuration_for_household(df, headcount, family_type, relationship, house_master):
+def draw_generation_configuration_for_household(df, headcount, family_type, relationship, house_master):
     """
     Given a headcount, family type (0,1,2,3), relationship between families
     (if applicable) and who the housemaster is (in multi-family households), this method returns all matching
@@ -34,7 +51,12 @@ def _generation_configuration_for_household(df, headcount, family_type, relation
             return df[(df.family_type == family_type) & (df.relationship == relationship)
                       & (df.house_master == house_master)]
         return df[(df.family_type == family_type) & (df.relationship == relationship)]
-    if family_type in (2, 3):
+    if family_type == 2:
+        if house_master not in (np.nan, '', None):
+            return df[(df.family_type == family_type) & (df.relationship == relationship)
+                      & (df.house_master == house_master)]
+        return df[(df.family_type == family_type)]
+    if family_type == 3:
         return df[(df.family_type == family_type)]
     if family_type == 0:
         if headcount == 1:
@@ -84,8 +106,8 @@ def generate_household_indices(data_folder):
                 house_master.extend([row.house_master] * row.total)
                 family_structure_regex.extend([row.family_structure_regex] * row.total)
 
-                gc_df = _generation_configuration_for_household(generations_configuration_df, row.household_headcount,
-                                                                row.family_type, row.relationship, row.house_master)
+                gc_df = draw_generation_configuration_for_household(generations_configuration_df, row.household_headcount,
+                                                                    row.family_type, row.relationship, row.house_master)
                 gc_idx = np.random.choice(gc_df.index.tolist(), p=gc_df.probability, size=row.total)
                 young.extend(gc_df.loc[gc_idx, 'young'])
                 middle.extend(gc_df.loc[gc_idx, 'middle'])
@@ -102,7 +124,7 @@ def generate_household_indices(data_folder):
     household_df.set_index('household_index').to_excel(os.path.join(data_folder, households_xlsx.file_name))
 
 
-def generate_generations_configuration(voivodship_folder, data_folder):
+def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
     """
     This function does the preprocessing of Census data for age generations living together in households:
 
@@ -119,8 +141,12 @@ def generate_generations_configuration(voivodship_folder, data_folder):
     Additionally, family_type field is changed from descriptive, string form into a number (0, 1, 2, 3) that represents
     the number of families living in a household.
     """
-    v_config_df = pd.read_excel(os.path.join(voivodship_folder, generations_configuration_xlsx.file_name),
-                                sheet_name='preprocessed', header=[0, 1])
+    output_file = data_folder / generations_configuration_xlsx.file_name
+    if output_file.is_file():
+        return pd.read_excel(str(output_file), sheet_name=generations_configuration_xlsx.sheet_name)
+
+    voivodship_workbook_path = str(data_folder / voivodship_cities_generations_configuration_xlsx.file_name)
+    v_config_df = pd.read_excel(voivodship_workbook_path, sheet_name='preprocessed', header=[0, 1])
     melted = pd.melt(v_config_df, id_vars=[('Unnamed: 0_level_0', 'family_type'),
                                            ('Unnamed: 1_level_0', 'relationship'),
                                            ('Unnamed: 2_level_0', 'house_master')],
@@ -148,15 +174,14 @@ def generate_generations_configuration(voivodship_folder, data_folder):
     pivoted.loc[pivoted['family_type'] == 'Trzy i więcej rodzinne', 'family_type'] = 3
     pivoted.loc[pivoted['family_type'] == 'Nierodzinne', 'family_type'] = 0
 
-    voivodship_workbook_path = os.path.join(voivodship_folder, generations_configuration_xlsx.file_name)
     book = load_workbook(voivodship_workbook_path)
 
-    if generations_configuration_xlsx.sheet_name in book.sheetnames:
-        del book[generations_configuration_xlsx.sheet_name]
+    if voivodship_cities_generations_configuration_xlsx.sheet_name in book.sheetnames:
+        del book[voivodship_cities_generations_configuration_xlsx.sheet_name]
 
     with closing(pd.ExcelWriter(voivodship_workbook_path, engine='openpyxl')) as writer:
         writer.book = book
-        pivoted.to_excel(writer, sheet_name=generations_configuration_xlsx.sheet_name, index=False)
+        pivoted.to_excel(writer, sheet_name=voivodship_cities_generations_configuration_xlsx.sheet_name, index=False)
         writer.save()
 
     # update with probabilities
@@ -165,11 +190,8 @@ def generate_generations_configuration(voivodship_folder, data_folder):
     pivoted = pivoted.merge(df, how='left', on=['family_type', 'relationship', 'house_master'])
     pivoted['probability'] = pivoted['households'] / pivoted['total']
 
-    output_file = os.path.join(data_folder, generations_configuration_xlsx.file_name)
-    if os.path.isfile(output_file):
-        os.unlink(output_file)
-
-    pivoted.to_excel(output_file, sheet_name=generations_configuration_xlsx.sheet_name, index=False)
+    pivoted.to_excel(str(output_file), sheet_name=generations_configuration_xlsx.sheet_name, index=False)
+    return pivoted
 
 
 if __name__ == '__main__':
