@@ -1,21 +1,18 @@
 import logging
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Tuple, Optional
 
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
 
-from sklearn.preprocessing import MinMaxScaler
-
-from src.features import entities
 from src.data import datasets, preprocessing_poland
+from src.features import entities
 from src.features.entities import BasicNode
-from src.features.population_generator_common import _age_gender_population, prepare_simulations_folder, \
-    get_age_gender_df
 from src.features.population_generator import PopulationGenerator
-from dataclasses import dataclass
+from src.features.population_generator_common import (
+    prepare_simulations_folder,
+    get_age_gender_df_with_generations)
 
 
 @dataclass
@@ -34,17 +31,25 @@ class CityPopulationGenerator(PopulationGenerator):
 
     def __init__(self, data_folder: Path):
         super().__init__(data_folder)
-        # age and gender merge with production age
-        self.age_gender_df = get_age_gender_df(self.data_folder)
+        # age and gender
+        self.age_gender_df = get_age_gender_df_with_generations(self.data_folder)
         population_size = self.age_gender_df.Total.sum()
+
+        # generations
+        self.young_df = self.age_gender_df[self.age_gender_df.generation == 'young'].copy()
+        self.young_df['total_probability'] = self.young_df['Total'] / self.young_df['Total'].sum()
+        self.middle_df = self.age_gender_df[self.age_gender_df.generation == 'middle'].copy()
+        self.middle_df['total_probability'] = self.middle_df['Total'] / self.middle_df['Total'].sum()
+        self.elderly_df = self.age_gender_df[self.age_gender_df.generation == 'elderly'].copy()
+        self.elderly_df['total_probability'] = self.elderly_df['Total'] / self.elderly_df['Total'].sum()
 
         self.households_count_df = pd.read_excel(str(self.data_folder / datasets.households_count_xlsx.file_name),
                                                  sheet_name=datasets.households_count_xlsx.sheet_name)
         # resample the number of households to fit the size of a population
         self.households_count_df['total_people'] = self.households_count_df['nb_of_people_in_household'] \
-                                                   * self.households_count_df['nb_of_households']
+            * self.households_count_df['nb_of_households']
         self.households_count_df['probability'] = self.households_count_df['nb_of_households'] \
-                                                  / self.households_count_df['nb_of_households'].sum()
+            / self.households_count_df['nb_of_households'].sum()
         old_population_size = self.households_count_df['total_people'].sum()
         self.households_count_df['nb_of_households'] *= (population_size / old_population_size)
 
@@ -64,8 +69,7 @@ class CityPopulationGenerator(PopulationGenerator):
 
     @property
     def number_of_households(self) -> int:
-        # return self.households_count_df['nb_of_households'].apply(np.ceil).sum()
-        return 3
+        return int(self.households_count_df['nb_of_households'].apply(np.ceil).sum())
 
     def _draw_household_and_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
         household = self._draw_a_household(current_household_idx)
@@ -74,12 +78,10 @@ class CityPopulationGenerator(PopulationGenerator):
         index = np.random.choice(house_masters.index.tolist(), p=house_masters_probability)
         masters_age = house_masters.loc[index, 'Age']
         masters_gender = entities.gender_from_string(house_masters.loc[index, 'Gender'])
-        nodes = [BasicNode(current_index, masters_age, masters_gender, current_household_idx)]
-
-        for i in range(1, household.household_headcount):
-            nodes.append(BasicNode(current_index + i))
-
-        return nodes, current_index + household.household_headcount
+        master_age_generation = entities.AgeGroup(
+            int(house_masters.loc[index, 'middle'] + house_masters.loc[index, 'elderly'] * 2)).name
+        master = BasicNode(current_index, masters_age, masters_gender, current_household_idx, master_age_generation)
+        return self.generate_population(current_index, household, master)
 
     def _draw_a_household(self, current_household_idx: int) -> Household:
         """Randomly select a household given the probability of occurrence"""
@@ -111,6 +113,51 @@ class CityPopulationGenerator(PopulationGenerator):
                               house_master=family_structure.house_master,
                               young=gc_row.young, middle=gc_row.middle, elderly=gc_row.elderly)
         return household
+
+    def generate_population(self, current_index: int, household_row: Household, master: BasicNode) -> Tuple[List[BasicNode], int]:
+
+        lodged_headcount = 1
+
+        inhabitants = [master]
+        current_index += 1
+
+        if household_row.young == 1 and not master.young:
+            person, current_index = self._draw_from_subpopulation(self.young_df, 1, household_row.household_index,
+                                                                  current_index)
+            inhabitants.append(person[0])
+            lodged_headcount += 1
+
+        if household_row.middle == 1 and not master.middle_aged:
+            person, current_index = self._draw_from_subpopulation(self.middle_df, 1, household_row.household_index,
+                                                                  current_index)
+            inhabitants.append(person[0])
+            lodged_headcount += 1
+
+        if household_row.elderly == 1 and not master.elderly:
+            person, current_index = self._draw_from_subpopulation(self.elderly_df, 1, household_row.household_index,
+                                                                  current_index)
+            inhabitants.append(person[0])
+            lodged_headcount += 1
+
+        sample_size = int(household_row.household_headcount - lodged_headcount)
+        # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
+        if sample_size <= 0:
+            return inhabitants, current_index
+
+        age_groups_in_household = []
+        if household_row.young == 1:
+            age_groups_in_household.append('young')
+        if household_row.middle == 1:
+            age_groups_in_household.append('middle')
+        if household_row.elderly == 1:
+            age_groups_in_household.append('elderly')
+
+        other, current_index = self._draw_from_subpopulation(
+            self.age_gender_df[self.age_gender_df.generation.isin(age_groups_in_household)],
+            household_row.household_index, sample_size,
+            current_index)
+
+        return inhabitants + other, current_index
 
 
 def narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row):
@@ -215,121 +262,6 @@ def narrow_housemasters_by_headcount_and_age_group(household_by_master, househol
     raise ValueError(f'Couldn\'t find masters for {household_row}')
 
 
-def generate_population(data_folder: Path, output_folder: Path, households: pd.DataFrame):
-    population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
-    if not population_ready_xlsx.is_file():
-
-        # get this age_gender dataframe and sample for each person
-        # or ignore population_size and sum up all
-        age_gender_df = pd.read_excel(str(data_folder / datasets.age_gender_xlsx.file_name),
-                                      sheet_name=datasets.age_gender_xlsx.sheet_name)
-
-        population = _age_gender_population(age_gender_df)
-        population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
-        production_age_df = pd.read_excel(str(data_folder.parent / datasets.production_age.file_name),
-                                          sheet_name=datasets.production_age.sheet_name)
-        population = pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
-
-        logging.info('Finding homeless people...')
-        # now we need to lodge other people
-        homeless = population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]
-        homeless_indices = {'young': homeless[homeless.generation == 'young'].index.tolist(),
-                            'middle': homeless[homeless.generation == 'middle'].index.tolist(),
-                            'elderly': homeless[homeless.generation == 'elderly'].index.tolist()}
-        # household_index = population[entities.prop_household]
-
-        logging.info('Selecting households with housemasters and headcount greater than 1...')
-        households = households[(households.household_headcount > 1)
-                                & (households.house_master != entities.HOUSEHOLD_NOT_ASSIGNED)]
-
-        try:
-            for idx, household_row in tqdm(households.iterrows(), desc='Lodging population'):
-                lodged_headcount = 1
-                try:
-                    hm_generation = population.iloc[household_row.house_master]['generation']
-                except ValueError as e:
-                    logging.error(
-                        f'ValueError ({str(e)}) for {household_row.household_index} (house_master={household_row.house_master})')
-                    continue
-                except TypeError as e:
-                    logging.error(
-                        f'TypeError ({str(e)}) for {household_row.household_index} (house_master={household_row.house_master})')
-                    continue
-                # at least one person from each generation
-
-                if household_row.young == 1 and hm_generation != 'young':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['young'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['young'].remove(homeless_idx)
-                        lodged_headcount += 1
-                    except ValueError:
-                        logging.error('No more people within young generation')
-
-                if household_row.middle == 1 and hm_generation != 'middle':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['middle'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['middle'].remove(homeless_idx)
-                        lodged_headcount += 1
-                    except ValueError:
-                        logging.error('No more people within middle generation')
-
-                if household_row.elderly == 1 and hm_generation != 'elderly':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['elderly'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['elderly'].remove(homeless_idx)
-                        lodged_headcount += 1
-                    except ValueError:
-                        logging.error('No more people within young generation')
-
-                sample_size = int(household_row.household_headcount - lodged_headcount)
-                # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
-                if sample_size <= 0:
-                    continue
-
-                age_groups_in_household = []
-                population_to_draw_from = []
-                if household_row.young == 1:
-                    age_groups_in_household.append('young')
-                    population_to_draw_from.extend(homeless_indices['young'])
-                if household_row.middle == 1:
-                    age_groups_in_household.append('middle')
-                    population_to_draw_from.extend(homeless_indices['middle'])
-                if household_row.elderly == 1:
-                    age_groups_in_household.append('elderly')
-                    population_to_draw_from.extend(homeless_indices['elderly'])
-
-                if len(population_to_draw_from) == 0:
-                    logging.error(f'No population to select from for {household_row.household_index}')
-                    continue
-                try:
-                    homeless_idx = np.random.choice(population_to_draw_from, replace=False, size=sample_size)
-                except ValueError:
-                    logging.error(
-                        f'Not enough population to lodge {household_row.household_index}. Taking all {len(population_to_draw_from)} available ({sample_size} needed).')
-                    homeless_idx = population_to_draw_from
-                population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                for index in homeless_idx:
-                    for gen in age_groups_in_household:
-                        try:
-                            homeless_indices[gen].remove(index)
-                            break
-                        except ValueError:
-                            continue
-        finally:
-            logging.info('Saving a population to a file... ')
-            population.to_excel(str(output_folder / datasets.output_population_xlsx.file_name), index=False)
-
-            logging.info('Saving households to a file... ')
-            households.to_excel(str(output_folder / datasets.output_households_xlsx.file_name),
-                                sheet_name=datasets.output_households_xlsx.sheet_name, index=False)
-    else:
-        population = pd.read_excel(str(output_folder / datasets.output_population_xlsx.file_name))
-    return population
-
-
 if __name__ == '__main__':
     log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.basicConfig(level=logging.INFO, format=log_fmt)
@@ -338,4 +270,4 @@ if __name__ == '__main__':
     project_dir = Path(__file__).resolve().parents[2]
     warsaw_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
 
-    CityPopulationGenerator(warsaw_folder).run()
+    print(CityPopulationGenerator(warsaw_folder).number_of_households)

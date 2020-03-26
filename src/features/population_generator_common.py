@@ -58,7 +58,7 @@ def sample_from_distribution(sample_size, distribution_name, *args, **kwargs):
     return distribution.rvs(*args, size=sample_size, **kwargs)
 
 
-def _drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
+def drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
     columns = df.columns.tolist()
     to_drop = [col for col in columns if col not in entities.columns]
     return df.drop(columns=to_drop)
@@ -72,12 +72,12 @@ def age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
+def fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
     return df[df[entities.prop_household] != -1]
 
 
 def cleanup(df: pd.DataFrame) -> pd.DataFrame:
-    return age_range_to_age(_drop_obsolete_columns(_fix_homeless(df)))
+    return age_range_to_age(drop_obsolete_columns(fix_homeless(df)))
 
 
 def get_age_gender_df(data_folder: Path, sheet_name: Optional[str] = datasets.age_gender_xlsx.sheet_name) \
@@ -92,4 +92,11 @@ def get_age_gender_df(data_folder: Path, sheet_name: Optional[str] = datasets.ag
         logging.warning('Age column contains invalid literal and cannot be cast to int')
     age_gender_df['female_probability'] = age_gender_df.Females / (age_gender_df.Females + age_gender_df.Males)
     return age_gender_df
+
+
+def get_age_gender_df_with_generations(data_folder: Path,
+                                       sheet_name: Optional[str] = datasets.age_gender_xlsx.sheet_name) \
+        -> pd.DataFrame:
+    generations_df = pd.read_excel(str(data_folder.parent / datasets.generations_xlsx.file_name))
+    return pd.merge(get_age_gender_df(data_folder, sheet_name), generations_df, left_on='Age', right_on='age')
 

@@ -2,6 +2,7 @@
 with basic data of an individual and all data, respectively."""
 import numpy as np
 from enum import Enum
+from typing import Optional
 
 
 prop_idx = 'idx'
@@ -13,6 +14,9 @@ prop_public_transport_usage = 'public_transport_usage'
 prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
+
+# auxiliary
+prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
            prop_public_transport_usage, prop_public_transport_duration, prop_profession]
@@ -28,9 +32,9 @@ data_types = {prop_idx: np.uint64,
 
 
 class AgeGroup(Enum):
-    YOUNG = 0
-    MIDDLE = 1
-    ELDERLY = 2
+    young = 0
+    middle = 1
+    elderly = 2
 
 
 class Gender(Enum):
@@ -75,7 +79,8 @@ class BasicNode(dict):
 
     def __init__(self, idx: int, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
-                 household: int = HOUSEHOLD_NOT_ASSIGNED) -> None:
+                 household: int = HOUSEHOLD_NOT_ASSIGNED,
+                 age_generation: Optional[str] = '') -> None:
         """
         Creates a node representing a person.
         :param age: (optional) age of the node, defaults to AGE_NOT_SET
@@ -88,6 +93,7 @@ class BasicNode(dict):
         self[prop_age] = age
         self[prop_gender] = gender.value
         self[prop_household] = household
+        self[prop_age_generation] = age_generation
 
     @property
     def idx(self) -> int:
@@ -116,6 +122,34 @@ class BasicNode(dict):
     @household.setter
     def household(self, household: int) -> None:
         self[prop_household] = household
+
+    @property
+    def economical_group(self) -> EconomicalGroup:
+        if self.age < 18:
+            return EconomicalGroup.PRZEDPRODUKCYJNY
+        if self.age < 45:
+            return EconomicalGroup.PRODUKCYJNY_MOBILNY
+        if self.gender == Gender.FEMALE.value and self.age < 60:
+            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
+        if self.gender == Gender.MALE.value and self.age < 65:
+            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
+        return EconomicalGroup.POPRODUKCYJNY
+
+    @property
+    def age_generation(self) -> str:
+        return self[prop_age_generation]
+
+    @property
+    def young(self) -> bool:
+        return self.age_generation == 'young'
+
+    @property
+    def middle_aged(self) -> bool:
+        return self.age_generation == 'middle'
+
+    @property
+    def elderly(self) -> bool:
+        return self.age_generation == 'elderly'
 
 
 class Node(BasicNode):
@@ -189,22 +223,3 @@ class Node(BasicNode):
     def profession(self, profession: int) -> None:
         self[prop_profession] = profession
 
-    @property
-    def economical_group(self) -> EconomicalGroup:
-        if self.age < 18:
-            return EconomicalGroup.PRZEDPRODUKCYJNY
-        if self.age < 45:
-            return EconomicalGroup.PRODUKCYJNY_MOBILNY
-        if self.gender == Gender.FEMALE.value and self.age < 60:
-            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
-        if self.gender == Gender.MALE.value and self.age < 65:
-            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
-        return EconomicalGroup.POPRODUKCYJNY
-
-    @property
-    def age_group(self) -> AgeGroup:
-        if self.age < 30:
-            return AgeGroup.YOUNG
-        if self.age < 60:
-            return AgeGroup.MIDDLE
-        return AgeGroup.ELDERLY

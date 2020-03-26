@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.features.entities import BasicNode, GENDERS
-from src.features.population_generator_common import nodes_to_dataframe, age_range_to_age
+from src.features.population_generator_common import nodes_to_dataframe, cleanup
 
 
 class PopulationGenerator(ABC):
@@ -28,9 +28,15 @@ class PopulationGenerator(ABC):
         subpopulation and lodge them together in a household given by `household_idx`. """
         nodes = []
 
+        total_probability_col = 'total_probability'
+        if total_probability_col in subpopulation.columns.tolist():
+            total_probability = subpopulation[total_probability_col]
+        else:
+            total_probability = subpopulation['Total'] / subpopulation['Total'].sum()
+
         for _ in range(headcount):
-            idx = np.random.choice(subpopulation.index.tolist(), p=subpopulation['total_probability'])
-            row = subpopulation.iloc[idx]
+            idx = np.random.choice(subpopulation.index.tolist(), p=total_probability)
+            row = subpopulation.loc[idx]
             age = row['Age']
             gender = GENDERS[np.random.choice([0, 1], p=[row.female_probability, 1 - row.female_probability])]
             nodes.append(BasicNode(current_index, age, gender, household_idx))
@@ -52,8 +58,7 @@ class PopulationGenerator(ABC):
         """Saves (appends) households and population to csv files"""
         hdf = pd.DataFrame(data={self.household_csv_houshold_index_col: list(households.keys()),
                                  self.household_csv_idx_col: list(households.values())})
-        pdf = nodes_to_dataframe(nodes)
-        pdf = age_range_to_age(pdf)
+        pdf = cleanup(nodes_to_dataframe(nodes))
         if include_header:
             pdf.to_csv(str(simulation_folder / self.simulation_population_csv), index=False)
             hdf.to_csv(str(simulation_folder / self.simulation_household_csv), index=False)

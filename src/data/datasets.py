@@ -34,3 +34,5 @@ voivodship_cities_generations_configuration_xlsx = XlsxFile('voivodship_cities_g
                                                             'processed')
 voivodship_cities_household_family_structure_xlsx = XlsxFile('voivodship_cities_household_family_structure.xlsx',
                                                              'processed')
+
+generations_xlsx = XlsxFile('generations.xlsx', 'Sheet1')
