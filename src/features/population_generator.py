@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.features.entities import BasicNode, GENDERS
-from src.features.population_generator_common import nodes_to_dataframe, cleanup
+from src.features.population_generator_common import nodes_to_dataframe, cleanup_population
 
 
 class PopulationGenerator(ABC):
@@ -58,7 +58,7 @@ class PopulationGenerator(ABC):
         """Saves (appends) households and population to csv files"""
         hdf = pd.DataFrame(data={self.household_csv_houshold_index_col: list(households.keys()),
                                  self.household_csv_idx_col: list(households.values())})
-        pdf = cleanup(nodes_to_dataframe(nodes))
+        pdf = cleanup_population(nodes_to_dataframe(nodes))
         if include_header:
             pdf.to_csv(str(simulation_folder / self.simulation_population_csv), index=False)
             hdf.to_csv(str(simulation_folder / self.simulation_household_csv), index=False)

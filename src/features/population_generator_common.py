@@ -58,9 +58,9 @@ def sample_from_distribution(sample_size, distribution_name, *args, **kwargs):
     return distribution.rvs(*args, size=sample_size, **kwargs)
 
 
-def drop_obsolete_columns(df: pd.DataFrame) -> pd.DataFrame:
+def drop_obsolete_columns(df: pd.DataFrame, proper_columns) -> pd.DataFrame:
     columns = df.columns.tolist()
-    to_drop = [col for col in columns if col not in entities.columns]
+    to_drop = [col for col in columns if col not in proper_columns]
     return df.drop(columns=to_drop)
 
 
@@ -76,8 +76,12 @@ def fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
     return df[df[entities.prop_household] != -1]
 
 
-def cleanup(df: pd.DataFrame) -> pd.DataFrame:
-    return age_range_to_age(drop_obsolete_columns(fix_homeless(df)))
+def fix_empty_households(df: pd.DataFrame) -> pd.DataFrame:
+    return df[df[entities.h_prop_house_master_index] != -1]
+
+
+def cleanup_population(df: pd.DataFrame) -> pd.DataFrame:
+    return age_range_to_age(drop_obsolete_columns(fix_homeless(df), entities.columns))
 
 
 def get_age_gender_df(data_folder: Path, sheet_name: Optional[str] = datasets.age_gender_xlsx.sheet_name) \

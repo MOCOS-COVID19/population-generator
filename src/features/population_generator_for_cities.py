@@ -9,7 +9,8 @@ from tqdm import tqdm
 
 from src.data import datasets
 from src.features import entities
-from src.features.population_generator_common import _age_gender_population, sample_from_distribution, cleanup
+from src.features.population_generator_common import _age_gender_population, sample_from_distribution, \
+    cleanup_population, drop_obsolete_columns, fix_empty_households
 
 
 def generate_social_competence(sample_size, distribution_name='norm', loc=0, scale=1):
@@ -20,7 +21,8 @@ def generate_social_competence(sample_size, distribution_name='norm', loc=0, sca
     Warszawa: Pracownia Testów Psychologicznych Polskiego Towarzystwa Psychologicznego, 1997. ISBN 83-85512-89-6.
     :param sample_size: size of a sample
     :param distribution_name: name of a distribution
-    :param args: parameters of the distribution
+    :param loc: parameters of the distribution
+    :param scale: parameter of the distribution
     :return: social competence vector of a population
     """
     x = sample_from_distribution(sample_size, distribution_name, loc=loc, scale=scale)
@@ -153,46 +155,19 @@ def generate_households(data_folder: Path, voivodship_folder: Path, output_folde
         households = pd.read_excel(str(data_folder / datasets.households_xlsx.file_name),
                                    sheet_name=datasets.households_xlsx.sheet_name)
 
-        households['family1'] = ''
-        households['family2'] = ''
-        households['family3'] = ''
-
         masters_age = []
         masters_gender = []
 
         # household master
-        # Age	Headcount	Count	Sum in headcount	Probability within headcount	young	middle	elderly
-        household_by_master = pd.read_excel(str(voivodship_folder / datasets.households_by_master_xlsx.file_name),
-                                            sheet_name=datasets.households_by_master_xlsx.sheet_name)
-
-        # family structure
-        # families_and_children_df = pd.read_excel(str(data_folder / datasets.families_and_children_xlsx.file_name),
-        #                                         sheet_name=datasets.families_and_children_xlsx.sheet_name)
+        household_by_master = pd.read_excel(str(data_folder / datasets.voivodship_cities_households_by_master_xlsx.file_name),
+                                            sheet_name=datasets.voivodship_cities_households_by_master_xlsx.sheet_name)
 
         for idx, household_row in households.iterrows():
-            # household master
-            # indices = indices_by_headcount[household.household_headcount]  # ok
-            # proba = proba_by_headcount[household.household_headcount]
             masters = narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row)
-            masters['probability'] = masters['Count'] / masters['Count'].sum()
-            index = np.random.choice(masters.index.tolist(), p=masters['probability'])
+            p = masters['Count'] / masters['Count'].sum()
+            index = np.random.choice(masters.index.tolist(), p=p)
             masters_age.append(masters.loc[index, 'Age'])
             masters_gender.append(entities.gender_from_string(masters.loc[index, 'Gender']).value)
-
-            # family structure
-            """if household_row.family_type == 1:
-                households.loc[idx, 'family1'] = _get_family_structure(families_and_children_df,
-                                                                       household_row.household_headcount)
-            elif household_row.family_type == 2:
-                # this is wrong, because neglects the fact that there can be a 3,3 family or a 3,4
-                households.loc[idx, 'family1'] = _get_family_structure(families_and_children_df, 2)
-                households.loc[idx, 'family2'] = _get_family_structure(families_and_children_df,
-                                                                       household_row.household_headcount - 2)
-            elif household_row.family_type == 3:
-                households.loc[idx, 'family1'] = _get_family_structure(families_and_children_df, 2)
-                households.loc[idx, 'family2'] = _get_family_structure(families_and_children_df, 2)
-                households.loc[idx, 'family3'] = _get_family_structure(families_and_children_df,
-                                                                       household_row.household_headcount - 4)"""
 
         households['master_age'] = masters_age
         households['master_gender'] = masters_gender
@@ -232,7 +207,7 @@ def generate_employment(data_folder, age_gender_pop):
     return vector
 
 
-def generate_population(data_folder: Path, output_folder: Path, households: pd.DataFrame):
+def generate_population(data_folder: Path, output_folder: Path, households: pd.DataFrame, other_features: bool = True):
     population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
     if not population_ready_xlsx.is_file():
 
@@ -250,6 +225,9 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
         # get indices of households of a specific age, gender
         df23 = households.groupby(by=['master_age', 'master_gender'], sort=False).size() \
             .reset_index().rename(columns={0: 'total'})
+
+        households['house_master_index'] = entities.HOUSEHOLD_NOT_ASSIGNED
+        households['idx'] = ''
 
         # given a household and its master's age and gender
         # select a person
@@ -285,7 +263,8 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                 else:
                     raise
             population.loc[masters_indices, entities.prop_household] = households_indices
-            households.loc[households_indices, 'house_master'] = masters_indices
+            households.loc[households_indices, 'house_master_index'] = masters_indices
+            households.loc[households_indices, 'idx'] = [str(x) for x in masters_indices]
 
         logging.info('Finding homeless people...')
         # now we need to lodge other people
@@ -296,21 +275,22 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
         # household_index = population[entities.prop_household]
 
         logging.info('Selecting households with housemasters and headcount greater than 1...')
-        households = households[(households.household_headcount > 1)
-                                & (households.house_master != entities.HOUSEHOLD_NOT_ASSIGNED)]
+        households2 = households[(households.household_headcount > 1)
+                                & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
 
         try:
-            for idx, household_row in tqdm(households.iterrows(), desc='Lodging population'):
+            for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population'):
+                inhabitants = [household_row.house_master_index]
                 lodged_headcount = 1
                 try:
-                    hm_generation = population.iloc[household_row.house_master]['generation']
+                    hm_generation = population.iloc[household_row.house_master_index]['generation']
                 except ValueError as e:
                     logging.error(
-                        f'ValueError ({str(e)}) for {household_row.household_index} (house_master={household_row.house_master})')
+                        f'ValueError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
                     continue
                 except TypeError as e:
                     logging.error(
-                        f'TypeError ({str(e)}) for {household_row.household_index} (house_master={household_row.house_master})')
+                        f'TypeError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
                     continue
                 # at least one person from each generation
 
@@ -320,6 +300,7 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                         population.loc[homeless_idx, entities.prop_household] = household_row.household_index
                         homeless_indices['young'].remove(homeless_idx)
                         lodged_headcount += 1
+                        inhabitants.append(homeless_idx)
                     except ValueError:
                         logging.error('No more people within young generation')
 
@@ -329,6 +310,7 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                         population.loc[homeless_idx, entities.prop_household] = household_row.household_index
                         homeless_indices['middle'].remove(homeless_idx)
                         lodged_headcount += 1
+                        inhabitants.append(homeless_idx)
                     except ValueError:
                         logging.error('No more people within middle generation')
 
@@ -338,10 +320,12 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                         population.loc[homeless_idx, entities.prop_household] = household_row.household_index
                         homeless_indices['elderly'].remove(homeless_idx)
                         lodged_headcount += 1
+                        inhabitants.append(homeless_idx)
                     except ValueError:
                         logging.error('No more people within young generation')
 
                 sample_size = int(household_row.household_headcount - lodged_headcount)
+
                 # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
                 if sample_size <= 0:
                     continue
@@ -363,6 +347,7 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                     continue
                 try:
                     homeless_idx = np.random.choice(population_to_draw_from, replace=False, size=sample_size)
+                    inhabitants.extend(homeless_idx.tolist())
                 except ValueError:
                     logging.error(f'Not enough population to lodge {household_row.household_index}. Taking all {len(population_to_draw_from)} available ({sample_size} needed).')
                     homeless_idx = population_to_draw_from
@@ -374,34 +359,41 @@ def generate_population(data_folder: Path, output_folder: Path, households: pd.D
                             break
                         except ValueError:
                             continue
+                households.loc[household_row.household_index, 'idx'] = str(inhabitants)
 
             logging.info('Other features')
-            # social competence based on previous findings, probably to be changed
-            population[entities.prop_social_competence] = generate_social_competence(len(population.index))
+            if other_features:
+                # social competence based on previous findings, probably to be changed
+                population[entities.prop_social_competence] = generate_social_competence(len(population.index))
             # transportation
-            population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
-            # transportation duration
-            population[entities.prop_public_transport_duration] = generate_public_transport_duration(
-                population[entities.prop_public_transport_usage])
+                population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
+                # transportation duration
+                population[entities.prop_public_transport_duration] = generate_public_transport_duration(
+                    population[entities.prop_public_transport_usage])
 
-            population[entities.prop_employment_status] = generate_employment(data_folder,
-                                                                              population[[entities.prop_age,
-                                                                                              entities.prop_gender]])
+                population[entities.prop_employment_status] = generate_employment(data_folder,
+                                                                                  population[[entities.prop_age,
+                                                                                                  entities.prop_gender]])
+
             logging.info('Cleaning up the population dataframe')
-            population = cleanup(population)
+            population = cleanup_population(population)
+            households = fix_empty_households(households)
         finally:
             logging.info('Saving a population to a file... ')
-            population.to_excel(str(output_folder / datasets.output_population_xlsx.file_name), index=False)
+            population.to_csv(str(output_folder / datasets.output_population_csv.file_name), index=False)
 
             logging.info('Saving households to a file... ')
-            households.to_excel(str(output_folder / datasets.output_households_xlsx.file_name),
-                                sheet_name=datasets.output_households_xlsx.sheet_name, index=False)
+            households.to_csv(str(output_folder / datasets.output_households_full_csv.file_name), index=False)
+
+            households = drop_obsolete_columns(households, entities.household_columns)
+            households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
     else:
         population = pd.read_excel(str(output_folder / datasets.output_population_xlsx.file_name))
+        # TODO: add reading of a csv file
     return population
 
 
-def generate(data_folder: Path, population_size: int = 641607, simulations_folder: Path = None) -> pd.DataFrame:
+def generate(data_folder: Path, simulations_folder: Path = None, other_features: bool = True) -> pd.DataFrame:
     """
     Generates a population given the folder with data and the size of this population.
     :param data_folder: folder with data
@@ -421,7 +413,7 @@ def generate(data_folder: Path, population_size: int = 641607, simulations_folde
         simulations_folder.mkdir()
 
     households = generate_households(data_folder, voivodship_folder, simulations_folder)
-    population = generate_population(data_folder, simulations_folder, households)
+    population = generate_population(data_folder, simulations_folder, households, other_features)
     return population
 
 
@@ -431,11 +423,11 @@ if __name__ == '__main__':
 
     # not used in this stub but often useful for finding various files
     project_dir = Path(__file__).resolve().parents[2]
-    data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
+    data_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
 
     # To read population data from a file:
-    sim_dir = project_dir / 'data' / 'simulations' / '20200308_0010'
-    generate(data_folder, simulations_folder=sim_dir)
+    sim_dir = project_dir / 'data' / 'simulations' / '20200327_1052'
+    generate(data_folder, simulations_folder=sim_dir, other_features=False)
 
     # or to generate a new dataset
-    # generate(data_folder)
+    # generate(data_folder, other_features=False)

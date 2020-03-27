@@ -46,6 +46,12 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
     (if applicable) and who the housemaster is (in multi-family households), this method returns all matching
     households in the df dataframe.
     """
+
+    if house_master not in (np.nan, '', None) and isinstance(house_master, str):
+        house_master = house_master.strip()
+    if relationship not in (np.nan, '', None) and isinstance(relationship, str):
+        relationship = relationship.strip()
+
     if family_type == 1:
         if house_master not in (np.nan, '', None):
             return df[(df.family_type == family_type) & (df.relationship == relationship)
@@ -55,6 +61,8 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
         if house_master not in (np.nan, '', None):
             return df[(df.family_type == family_type) & (df.relationship == relationship)
                       & (df.house_master == house_master)]
+        if relationship not in (np.nan, '', None):
+            return df[(df.family_type == family_type) & (df.relationship == relationship)]
         return df[(df.family_type == family_type)]
     if family_type == 3:
         return df[(df.family_type == family_type)]
@@ -81,7 +89,7 @@ def generate_household_indices(data_folder):
     family_type = []
     relationship = []
     house_master = []
-    family_structure_regex = []
+    # family_structure_regex = []
     young = []
     middle = []
     elderly = []
@@ -104,7 +112,7 @@ def generate_household_indices(data_folder):
                 family_type.extend([row.family_type] * row.total)
                 relationship.extend([row.relationship] * row.total)
                 house_master.extend([row.house_master] * row.total)
-                family_structure_regex.extend([row.family_structure_regex] * row.total)
+                # family_structure_regex.extend([row.family_structure_regex] * row.total)
 
                 gc_df = draw_generation_configuration_for_household(generations_configuration_df, row.household_headcount,
                                                                     row.family_type, row.relationship, row.house_master)
@@ -118,7 +126,7 @@ def generate_household_indices(data_folder):
                                           family_type=family_type,
                                           relationship=relationship,
                                           house_master=house_master,
-                                          family_structure_regex=family_structure_regex,
+                                          # family_structure_regex=family_structure_regex,
                                           young=young, middle=middle, elderly=elderly))
 
     household_df.set_index('household_index').to_excel(os.path.join(data_folder, households_xlsx.file_name))
@@ -197,7 +205,7 @@ def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
 if __name__ == '__main__':
     project_dir = Path(__file__).resolve().parents[2]
     voivodship_folder = os.path.join(project_dir, 'data', 'processed', 'poland', 'D')
-    data_folder = os.path.join(project_dir, 'data', 'processed', 'poland', 'DW')
+    data_folder = os.path.join(project_dir, 'data', 'processed', 'poland', 'WW')
     # prepare_family_structure_from_voivodship(data_folder)
     generate_household_indices(data_folder)
     # generate_generations_configuration(voivodship_folder, data_folder)

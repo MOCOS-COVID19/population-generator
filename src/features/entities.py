@@ -30,6 +30,11 @@ data_types = {prop_idx: np.uint64,
               prop_household: np.uint64,
               prop_profession: np.uint64}
 
+h_prop_household_index = 'household_index'
+h_prop_inhabitants = 'idx'
+h_prop_house_master_index = 'house_master_index'
+household_columns = [h_prop_household_index, h_prop_inhabitants]
+
 
 class AgeGroup(Enum):
     young = 0
