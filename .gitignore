@@ -135,4 +135,5 @@ dmypy.json
 data/simulations/*
 !data/simulations/20200308_0010
 !data/simulations/README.md
-!data/simulations/20200327_1052
+!data/simulations/20200327_1052/population.csv
+!data/simulations/20200327_1052/households.csv

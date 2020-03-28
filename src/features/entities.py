@@ -166,7 +166,8 @@ class Node(BasicNode):
                  public_transport_usage: float = PUBLIC_TRANSPORT_USAGE_NOT_SET,
                  public_transport_duration: float = PUBLIC_TRANSPORT_DURATION_NOT_SET,
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
-                 profession: int = PROFESSION_NOT_ASSIGNED) -> None:
+                 profession: int = PROFESSION_NOT_ASSIGNED,
+                 age_generation: Optional[str] = '') -> None:
         """
             Creates a node representing a person.
             :param age: (optional) age of the node, defaults to AGE_NOT_SET
@@ -179,9 +180,10 @@ class Node(BasicNode):
             mean vs other aggregate function), defaults to PUBLIC_TRANSPORT_DURATION_NOT_SET
             :param household: (optional) household index of the node, defaults to HOUSEHOLD_NOT_ASSIGNED
             :param profession: (optional) profession index of the node, defaults to PROFESSION_NOT_ASSIGNED
+            :param age_generation: (optional) age_generation of an individual
             :return: None
         """
-        super().__init__(0, age, gender, household)
+        super().__init__(0, age, gender, household, age_generation)
         self[prop_employment_status] = employment_status.value
         self[prop_social_competence] = social_competence
         self[prop_public_transport_usage] = public_transport_usage
