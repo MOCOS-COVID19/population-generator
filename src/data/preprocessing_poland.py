@@ -6,6 +6,7 @@ from contextlib import closing
 from src.data.datasets import *
 import numpy as np
 from xlrd import XLRDError
+import logging
 
 
 def prepare_family_structure_from_voivodship(data_folder: Path) -> pd.DataFrame:
@@ -73,7 +74,30 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
     raise ValueError(f'Unknown family type {family_type}')
 
 
-def generate_household_indices(data_folder):
+def _sanitize_households_count(households_count_df, population_size):
+    old_population = (households_count_df['nb_of_people_in_household']*households_count_df['nb_of_households']).sum()
+    households_count_df['nb_of_households'] *= (population_size / old_population)
+    households_count_df['nb_of_households'] = households_count_df['nb_of_households'].apply(np.ceil).astype(int)
+    assert (households_count_df['nb_of_people_in_household']*households_count_df['nb_of_households']).sum() \
+        >= population_size
+
+
+def _filter_family_structures_for_household(family_structure_df, hc_row):
+    fs_df = family_structure_df[family_structure_df.household_headcount == hc_row.nb_of_people_in_household].copy()
+    fs_df['total'] = (np.round(fs_df.probability_within_headcount * hc_row.nb_of_households)).astype(int)
+
+    difference_due_to_rounding = hc_row.nb_of_households - fs_df['total'].sum()
+    if difference_due_to_rounding != 0:
+        logging.info(f'Difference due to numeric error {difference_due_to_rounding} - assigning randomly')
+        try:
+            fs_df.loc[np.random.choice(fs_df[fs_df.total > 0].index.tolist()), 'total'] += difference_due_to_rounding
+        except ValueError:
+            fs_df.loc[np.random.choice(fs_df.index.tolist()), 'total'] += difference_due_to_rounding
+
+    return fs_df
+
+
+def generate_household_indices(data_folder, population_size):
     """Generates and saves to an excel file a dataframe of households. Each household consists of:
      * an index,
      * headcount,
@@ -101,10 +125,11 @@ def generate_household_indices(data_folder):
     generations_configuration_df = pd.read_excel(os.path.join(data_folder, generations_configuration_xlsx.file_name),
                                                  sheet_name=generations_configuration_xlsx.sheet_name)
 
+    _sanitize_households_count(households_count_df, population_size)
+
     for i, hc_row in households_count_df.iterrows():
         # family structure given this headcount
-        fs_df = family_structure_df[family_structure_df.household_headcount == hc_row.nb_of_people_in_household].copy()
-        fs_df['total'] = (fs_df.probability_within_headcount * hc_row.nb_of_households).astype(int)
+        fs_df = _filter_family_structures_for_household(family_structure_df, hc_row)
 
         for j, row in fs_df.iterrows():
             if row.total > 0:
@@ -112,10 +137,12 @@ def generate_household_indices(data_folder):
                 family_type.extend([row.family_type] * row.total)
                 relationship.extend([row.relationship] * row.total)
                 house_master.extend([row.house_master] * row.total)
-                # family_structure_regex.extend([row.family_structure_regex] * row.total)
 
-                gc_df = draw_generation_configuration_for_household(generations_configuration_df, row.household_headcount,
-                                                                    row.family_type, row.relationship, row.house_master)
+                gc_df = draw_generation_configuration_for_household(generations_configuration_df,
+                                                                    row.household_headcount,
+                                                                    row.family_type,
+                                                                    row.relationship,
+                                                                    row.house_master)
                 gc_idx = np.random.choice(gc_df.index.tolist(), p=gc_df.probability, size=row.total)
                 young.extend(gc_df.loc[gc_idx, 'young'])
                 middle.extend(gc_df.loc[gc_idx, 'middle'])
@@ -126,7 +153,6 @@ def generate_household_indices(data_folder):
                                           family_type=family_type,
                                           relationship=relationship,
                                           house_master=house_master,
-                                          # family_structure_regex=family_structure_regex,
                                           young=young, middle=middle, elderly=elderly))
 
     household_df.set_index('household_index').to_excel(os.path.join(data_folder, households_xlsx.file_name))

@@ -8,22 +8,24 @@ from datetime import datetime
 import scipy.stats
 import logging
 import numpy as np
-
+from src.data.datasets import XlsxFile
 
 project_dir = Path(__file__).resolve().parents[2]
 
 
-def _age_gender_population(age_gender_df: pd.DataFrame) -> pd.DataFrame:
+def age_gender_population(age_gender_df: pd.DataFrame) -> pd.DataFrame:
     """Polish census data gives age and gender together. For each age (or age range) there is a number of males and
     females provided. This function generates a dataframe of people with age and gender. The length of the dataframe
     equals the total number of people in the Census data. """
     ages = []
     genders = []
     for idx, row in age_gender_df.iterrows():
-        ages.extend([row.Age] * row.Total)
+        ages.extend([row.Age] * (row.Males + row.Females))
         genders.extend([entities.Gender.MALE.value] * row.Males)
         genders.extend([entities.Gender.FEMALE.value] * row.Females)
-    return pd.DataFrame(data={entities.prop_age: ages, entities.prop_gender: genders})
+    df = pd.DataFrame(data={entities.prop_age: ages, entities.prop_gender: genders})
+    df.index.name = 'idx'
+    return df
 
 
 def nodes_to_dataframe(nodes: List[entities.Node]) -> pd.DataFrame:

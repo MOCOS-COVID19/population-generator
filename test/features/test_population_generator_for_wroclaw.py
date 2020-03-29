@@ -48,7 +48,7 @@ class TestEmployment(TestCase):
         cls.data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
         age_gender_df = pd.read_excel(str(cls.data_folder / datasets.age_gender_xlsx.file_name),
                                       sheet_name=datasets.age_gender_xlsx.sheet_name)
-        cls.pop = population._age_gender_population(age_gender_df)
+        cls.pop = population.age_gender_population(age_gender_df)
         cls.population_size = len(cls.pop.index)
 
     def test_generate_employment(self):
@@ -63,7 +63,7 @@ class TestPublicTransport(TestCase):
         cls.data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
         age_gender_df = pd.read_excel(str(cls.data_folder / datasets.age_gender_xlsx.file_name),
                                       sheet_name=datasets.age_gender_xlsx.sheet_name)
-        cls.pop = population._age_gender_population(age_gender_df)
+        cls.pop = population.age_gender_population(age_gender_df)
         cls.population_size = len(cls.pop.index)
 
     def test_generate_public_transport(self):

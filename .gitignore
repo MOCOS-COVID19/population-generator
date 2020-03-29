@@ -137,3 +137,4 @@ data/simulations/*
 !data/simulations/README.md
 !data/simulations/20200327_1052/population.csv
 !data/simulations/20200327_1052/households.csv
+/test/features/resources/households.xlsx

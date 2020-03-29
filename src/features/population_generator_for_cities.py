@@ -7,10 +7,11 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 
-from src.data import datasets
+from src.data import datasets, preprocessing_poland
 from src.features import entities
-from src.features.population_generator_common import _age_gender_population, sample_from_distribution, \
-    cleanup_population, drop_obsolete_columns, fix_empty_households
+from src.features.population_generator_common import (age_gender_population,
+                                                      sample_from_distribution,
+                                                      cleanup_population, drop_obsolete_columns, fix_empty_households)
 
 
 def generate_social_competence(sample_size, distribution_name='norm', loc=0, scale=1):
@@ -141,7 +142,7 @@ def _get_family_structure(families_and_children_df, headcount):
         logging.exception(f'Something went wrong for {headcount}')
 
 
-def generate_households(data_folder: Path, voivodship_folder: Path, output_folder: Path) -> pd.DataFrame:
+def generate_households(data_folder: Path, output_folder: Path, population_size: int) -> pd.DataFrame:
     """
     Given a population size and the path to a folder with data, generates households for this population.
     :param data_folder: path to a folder with data
@@ -152,6 +153,9 @@ def generate_households(data_folder: Path, voivodship_folder: Path, output_folde
     households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
     if not households_ready_xlsx.is_file():
 
+        if not (data_folder / datasets.households_xlsx.file_name).is_file():
+            preprocessing_poland.generate_household_indices(str(data_folder), population_size)
+
         households = pd.read_excel(str(data_folder / datasets.households_xlsx.file_name),
                                    sheet_name=datasets.households_xlsx.sheet_name)
 
@@ -159,8 +163,9 @@ def generate_households(data_folder: Path, voivodship_folder: Path, output_folde
         masters_gender = []
 
         # household master
-        household_by_master = pd.read_excel(str(data_folder / datasets.voivodship_cities_households_by_master_xlsx.file_name),
-                                            sheet_name=datasets.voivodship_cities_households_by_master_xlsx.sheet_name)
+        household_by_master = pd.read_excel(
+            str(data_folder / datasets.voivodship_cities_households_by_master_xlsx.file_name),
+            sheet_name=datasets.voivodship_cities_households_by_master_xlsx.sheet_name)
 
         for idx, household_row in households.iterrows():
             masters = narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row)
@@ -207,189 +212,212 @@ def generate_employment(data_folder, age_gender_pop):
     return vector
 
 
-def generate_population(data_folder: Path, output_folder: Path, households: pd.DataFrame, other_features: bool = True):
-    population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
-    if not population_ready_xlsx.is_file():
+def assign_house_masters(households, population):
+    # get indices of households of a specific age, gender
+    df23 = households.groupby(by=['master_age', 'master_gender'], sort=False).size() \
+        .reset_index().rename(columns={0: 'total'})
 
-        # get this age_gender dataframe and sample for each person
-        # or ignore population_size and sum up all
-        age_gender_df = pd.read_excel(str(data_folder / datasets.age_gender_xlsx.file_name),
-                                      sheet_name=datasets.age_gender_xlsx.sheet_name)
+    households[entities.h_prop_house_master_index] = entities.HOUSEHOLD_NOT_ASSIGNED
+    households[entities.h_prop_inhabitants] = ''
 
-        population = _age_gender_population(age_gender_df)
-        population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
-        production_age_df = pd.read_excel(str(data_folder / datasets.production_age.file_name),
-                                          sheet_name=datasets.production_age.sheet_name)
-        population = pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
-
-        # get indices of households of a specific age, gender
-        df23 = households.groupby(by=['master_age', 'master_gender'], sort=False).size() \
-            .reset_index().rename(columns={0: 'total'})
-
-        households['house_master_index'] = entities.HOUSEHOLD_NOT_ASSIGNED
-        households['idx'] = ''
-
-        # given a household and its master's age and gender
-        # select a person
-        # set index of a person onto a household
-        # set index of a household onto a person
-        for idx, df23_row in tqdm(df23.iterrows(), desc='Master selection'):
-            if df23_row.master_age == '19 lat i mniej':
-                subpopulation = population[population[entities.prop_age].isin((18, 19))
-                                           & (population[entities.prop_gender] == df23_row[
-                    'master_gender'])].index.tolist()
-            elif df23_row.master_age == '20-24':
-                subpopulation = population[population[entities.prop_age].isin((20, 21, 22, 23, 24))
-                                           & (population[entities.prop_gender] == df23_row[
-                    'master_gender'])].index.tolist()
-            elif df23_row.master_age == '25-29':
-                subpopulation = population[population[entities.prop_age].isin((25, 26, 27, 28, 29))
-                                           & (population[entities.prop_gender] == df23_row[
-                    'master_gender'])].index.tolist()
-            else:
-                subpopulation = population[(population[entities.prop_age] == df23_row['master_age'])
-                                           & (population[entities.prop_gender] == df23_row[
-                    'master_gender'])].index.tolist()
-            households_indices = households[(households.master_age == df23_row.master_age) &
-                                            (households.master_gender == df23_row.master_gender)].index.tolist()
-            try:
-                masters_indices = np.random.choice(subpopulation, replace=False, size=df23_row.total)
-            except ValueError as e:
-                if str(e) == 'Cannot take a larger sample than population when \'replace=False\'':
-                    logging.info(f'THere are more masters than people in the population for {df23_row}. '
-                                 f'Making all people within this cluster masters.')
-                    masters_indices = subpopulation
-                    households_indices = np.random.choice(households_indices, replace=False, size=len(masters_indices))
-                else:
-                    raise
-            population.loc[masters_indices, entities.prop_household] = households_indices
-            households.loc[households_indices, 'house_master_index'] = masters_indices
-            households.loc[households_indices, 'idx'] = [str(x) for x in masters_indices]
-
-        logging.info('Finding homeless people...')
-        # now we need to lodge other people
-        homeless = population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]
-        homeless_indices = {'young': homeless[homeless.generation == 'young'].index.tolist(),
-                            'middle': homeless[homeless.generation == 'middle'].index.tolist(),
-                            'elderly': homeless[homeless.generation == 'elderly'].index.tolist()}
-        # household_index = population[entities.prop_household]
-
-        logging.info('Selecting households with housemasters and headcount greater than 1...')
-        households2 = households[(households.household_headcount > 1)
-                                & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
-
+    # given a household and its master's age and gender
+    # select a person
+    # set index of a person onto a household
+    # set index of a household onto a person
+    for idx, df23_row in tqdm(df23.iterrows(), desc='Master selection'):
+        if df23_row.master_age == '19 lat i mniej':
+            subpopulation = population[population[entities.prop_age].isin((18, 19))
+                                       & (population[entities.prop_gender] == df23_row[
+                'master_gender'])].index.tolist()
+        elif df23_row.master_age == '20-24':
+            subpopulation = population[population[entities.prop_age].isin((20, 21, 22, 23, 24))
+                                       & (population[entities.prop_gender] == df23_row[
+                'master_gender'])].index.tolist()
+        elif df23_row.master_age == '25-29':
+            subpopulation = population[population[entities.prop_age].isin((25, 26, 27, 28, 29))
+                                       & (population[entities.prop_gender] == df23_row[
+                'master_gender'])].index.tolist()
+        else:
+            subpopulation = population[(population[entities.prop_age] == df23_row['master_age'])
+                                       & (population[entities.prop_gender] == df23_row[
+                'master_gender'])].index.tolist()
+        households_indices = households[(households.master_age == df23_row.master_age) &
+                                        (households.master_gender == df23_row.master_gender)].index.tolist()
         try:
-            for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population'):
-                inhabitants = [household_row.house_master_index]
-                lodged_headcount = 1
+            masters_indices = np.random.choice(subpopulation, replace=False, size=df23_row.total)
+        except ValueError as e:
+            if str(e) == 'Cannot take a larger sample than population when \'replace=False\'':
+                logging.info(f'THere are more masters than people in the population for {df23_row}. '
+                             f'Making all people within this cluster masters.')
+                masters_indices = subpopulation
+                households_indices = np.random.choice(households_indices, replace=False, size=len(masters_indices))
+            else:
+                raise
+        population.loc[masters_indices, entities.prop_household] = households_indices
+        households.loc[households_indices, entities.h_prop_house_master_index] = masters_indices
+        households.loc[households_indices, entities.h_prop_inhabitants] = [str(x) for x in masters_indices]
+
+
+def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFrame:
+    age_gender_df = pd.read_excel(str(data_folder / datasets.age_gender_xlsx.file_name),
+                                  sheet_name=datasets.age_gender_xlsx.sheet_name)
+    population = age_gender_population(age_gender_df)
+    population['age'] = population['age'].astype(str)
+    # add age generation for each person
+    production_age_df = pd.read_excel(str(data_folder / datasets.production_age.file_name),
+                                      sheet_name=datasets.production_age.sheet_name)
+    return pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
+
+
+def generate_population(data_folder: Path, output_folder: Path, other_features: bool = True):
+    # if population already generated, read from file
+    population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
+    if population_ready_xlsx.is_file():
+        return pd.read_excel(str(population_ready_xlsx))
+
+    population_ready_csv = output_folder / datasets.output_population_csv.file_name
+    if population_ready_csv.is_file():
+        return pd.read_csv(str(population_ready_csv))
+
+    # if not generated yet, create from scratch
+    # get all population with their age and gender
+    population = age_gender_generation_population_from_files(data_folder)
+
+    # population size
+    population_size = len(population.index)
+
+    # initial household assignemtn
+    population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
+
+    # get households
+    households = generate_households(data_folder, output_folder, population_size)
+
+    logging.info('House master assignment')
+    assign_house_masters(households, population)
+
+    logging.info('Finding homeless people...')
+    # now we need to lodge other people
+    homeless = population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]
+    homeless_indices = {'young': homeless[homeless.generation == 'young'].index.tolist(),
+                        'middle': homeless[homeless.generation == 'middle'].index.tolist(),
+                        'elderly': homeless[homeless.generation == 'elderly'].index.tolist()}
+    # household_index = population[entities.prop_household]
+
+    logging.info('Selecting households with housemasters and headcount greater than 1...')
+    households2 = households[(households.household_headcount > 1)
+                             & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
+
+    try:
+        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population'):
+            inhabitants = [household_row.house_master_index]
+            lodged_headcount = 1
+            try:
+                hm_generation = population.iloc[household_row.house_master_index]['generation']
+            except ValueError as e:
+                logging.error(
+                    f'ValueError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
+                continue
+            except TypeError as e:
+                logging.error(
+                    f'TypeError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
+                continue
+            # at least one person from each generation
+
+            if household_row.young == 1 and hm_generation != 'young':
                 try:
-                    hm_generation = population.iloc[household_row.house_master_index]['generation']
-                except ValueError as e:
-                    logging.error(
-                        f'ValueError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
-                    continue
-                except TypeError as e:
-                    logging.error(
-                        f'TypeError ({str(e)}) for {household_row.household_index} (house_master_index={household_row.house_master_index})')
-                    continue
-                # at least one person from each generation
-
-                if household_row.young == 1 and hm_generation != 'young':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['young'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['young'].remove(homeless_idx)
-                        lodged_headcount += 1
-                        inhabitants.append(homeless_idx)
-                    except ValueError:
-                        logging.error('No more people within young generation')
-
-                if household_row.middle == 1 and hm_generation != 'middle':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['middle'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['middle'].remove(homeless_idx)
-                        lodged_headcount += 1
-                        inhabitants.append(homeless_idx)
-                    except ValueError:
-                        logging.error('No more people within middle generation')
-
-                if household_row.elderly == 1 and hm_generation != 'elderly':
-                    try:
-                        homeless_idx = np.random.choice(homeless_indices['elderly'])
-                        population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                        homeless_indices['elderly'].remove(homeless_idx)
-                        lodged_headcount += 1
-                        inhabitants.append(homeless_idx)
-                    except ValueError:
-                        logging.error('No more people within young generation')
-
-                sample_size = int(household_row.household_headcount - lodged_headcount)
-
-                # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
-                if sample_size <= 0:
-                    continue
-
-                age_groups_in_household = []
-                population_to_draw_from = []
-                if household_row.young == 1:
-                    age_groups_in_household.append('young')
-                    population_to_draw_from.extend(homeless_indices['young'])
-                if household_row.middle == 1:
-                    age_groups_in_household.append('middle')
-                    population_to_draw_from.extend(homeless_indices['middle'])
-                if household_row.elderly == 1:
-                    age_groups_in_household.append('elderly')
-                    population_to_draw_from.extend(homeless_indices['elderly'])
-
-                if len(population_to_draw_from) == 0:
-                    logging.error(f'No population to select from for {household_row.household_index}')
-                    continue
-                try:
-                    homeless_idx = np.random.choice(population_to_draw_from, replace=False, size=sample_size)
-                    inhabitants.extend(homeless_idx.tolist())
+                    homeless_idx = np.random.choice(homeless_indices['young'])
+                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_indices['young'].remove(homeless_idx)
+                    lodged_headcount += 1
+                    inhabitants.append(homeless_idx)
                 except ValueError:
-                    logging.error(f'Not enough population to lodge {household_row.household_index}. Taking all {len(population_to_draw_from)} available ({sample_size} needed).')
-                    homeless_idx = population_to_draw_from
-                population.loc[homeless_idx, entities.prop_household] = household_row.household_index
-                for index in homeless_idx:
-                    for gen in age_groups_in_household:
-                        try:
-                            homeless_indices[gen].remove(index)
-                            break
-                        except ValueError:
-                            continue
-                households.loc[household_row.household_index, 'idx'] = str(inhabitants)
+                    logging.error('No more people within young generation')
 
-            logging.info('Other features')
-            if other_features:
-                # social competence based on previous findings, probably to be changed
-                population[entities.prop_social_competence] = generate_social_competence(len(population.index))
+            if household_row.middle == 1 and hm_generation != 'middle':
+                try:
+                    homeless_idx = np.random.choice(homeless_indices['middle'])
+                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_indices['middle'].remove(homeless_idx)
+                    lodged_headcount += 1
+                    inhabitants.append(homeless_idx)
+                except ValueError:
+                    logging.error('No more people within middle generation')
+
+            if household_row.elderly == 1 and hm_generation != 'elderly':
+                try:
+                    homeless_idx = np.random.choice(homeless_indices['elderly'])
+                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_indices['elderly'].remove(homeless_idx)
+                    lodged_headcount += 1
+                    inhabitants.append(homeless_idx)
+                except ValueError:
+                    logging.error('No more people within young generation')
+
+            sample_size = int(household_row.household_headcount - lodged_headcount)
+
+            # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
+            if sample_size <= 0:
+                continue
+
+            age_groups_in_household = []
+            population_to_draw_from = []
+            if household_row.young == 1:
+                age_groups_in_household.append('young')
+                population_to_draw_from.extend(homeless_indices['young'])
+            if household_row.middle == 1:
+                age_groups_in_household.append('middle')
+                population_to_draw_from.extend(homeless_indices['middle'])
+            if household_row.elderly == 1:
+                age_groups_in_household.append('elderly')
+                population_to_draw_from.extend(homeless_indices['elderly'])
+
+            if len(population_to_draw_from) == 0:
+                logging.error(f'No population to select from for {household_row.household_index}')
+                continue
+            try:
+                homeless_idx = np.random.choice(population_to_draw_from, replace=False, size=sample_size)
+                inhabitants.extend(homeless_idx.tolist())
+            except ValueError:
+                logging.error(f'Not enough population to lodge {household_row.household_index}. '
+                              f'Taking all {len(population_to_draw_from)} available ({sample_size} needed).')
+                homeless_idx = population_to_draw_from
+            population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+            for index in homeless_idx:
+                for gen in age_groups_in_household:
+                    try:
+                        homeless_indices[gen].remove(index)
+                        break
+                    except ValueError:
+                        continue
+            households.loc[household_row.household_index, 'idx'] = str(inhabitants)
+
+        logging.info('Other features')
+        if other_features:
+            # social competence based on previous findings, probably to be changed
+            population[entities.prop_social_competence] = generate_social_competence(len(population.index))
             # transportation
-                population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
-                # transportation duration
-                population[entities.prop_public_transport_duration] = generate_public_transport_duration(
-                    population[entities.prop_public_transport_usage])
+            population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
+            # transportation duration
+            population[entities.prop_public_transport_duration] = generate_public_transport_duration(
+                population[entities.prop_public_transport_usage])
 
-                population[entities.prop_employment_status] = generate_employment(data_folder,
-                                                                                  population[[entities.prop_age,
-                                                                                                  entities.prop_gender]])
+            population[entities.prop_employment_status] = generate_employment(data_folder,
+                                                                              population[[entities.prop_age,
+                                                                                          entities.prop_gender]])
 
-            logging.info('Cleaning up the population dataframe')
-            population = cleanup_population(population)
-            households = fix_empty_households(households)
-        finally:
-            logging.info('Saving a population to a file... ')
-            population.to_csv(str(output_folder / datasets.output_population_csv.file_name), index=False)
+        logging.info('Cleaning up the population dataframe')
+        population = cleanup_population(population)
+        households = fix_empty_households(households)
+    finally:
+        logging.info('Saving a population to a file... ')
+        population.to_csv(str(output_folder / datasets.output_population_csv.file_name))
 
-            logging.info('Saving households to a file... ')
-            households.to_csv(str(output_folder / datasets.output_households_full_csv.file_name), index=False)
+        logging.info('Saving households to a file... ')
+        households.to_csv(str(output_folder / datasets.output_households_full_csv.file_name), index=False)
 
-            households = drop_obsolete_columns(households, entities.household_columns)
-            households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
-    else:
-        population = pd.read_excel(str(output_folder / datasets.output_population_xlsx.file_name))
-        # TODO: add reading of a csv file
+        households = drop_obsolete_columns(households, entities.household_columns)
+        households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
+
     return population
 
 
@@ -403,18 +431,13 @@ def generate(data_folder: Path, simulations_folder: Path = None, other_features:
     already exists and contains population.xslx file then a population is read from the file.
     :return: a pandas dataframe with a population generated from the data in data_folder
     """
-    voivodship = data_folder.name[0]
-    voivodship_folder = data_folder.parents[0] / voivodship
-
     # simulations folder
     if simulations_folder is None:
         simulations_folder = project_dir / 'data' / 'simulations' / datetime.now().strftime('%Y%m%d_%H%M')
     if not simulations_folder.is_dir():
         simulations_folder.mkdir()
 
-    households = generate_households(data_folder, voivodship_folder, simulations_folder)
-    population = generate_population(data_folder, simulations_folder, households, other_features)
-    return population
+    return generate_population(data_folder, simulations_folder, other_features)
 
 
 if __name__ == '__main__':
