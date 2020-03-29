@@ -1,11 +1,12 @@
 # this test should generate a small population
 from pathlib import Path
 from unittest import TestCase
-from src.features import population_generator_for_cities as gen
-from src.features import population_generator_common as common
-from src.features import entities
+
+import numpy as np
+
 from src.data import datasets
-import pandas as pd
+from src.features import entities
+from src.features import population_generator_for_cities as gen
 
 
 class TestPopulation(TestCase):
@@ -29,6 +30,8 @@ class TestPopulation(TestCase):
         self.assertEqual(304, len(households[households.household_headcount == 1].index))
         self.assertEqual(242, len(households[households.household_headcount == 2].index))
         self.assertTrue((self.resources_dir / datasets.households_xlsx.file_name).is_file())
+        households['sanity_check'] = households['young'] + households['middle'] + households['elderly']
+        self.assertEqual(0, len(households[households['sanity_check'] > households['household_headcount']]))
 
     def test_age_gender_generation_population_from_files(self):
         population_size = 1780
@@ -50,8 +53,9 @@ class TestPopulation(TestCase):
             self.assertEqual(males, m, f'Expected {m} got {males} for age {age}')
             self.assertEqual(females, f, f'Expected {f} got {females} for age {age}')
 
+        self.assertEqual(0, len(population[population.generation.isin(('', np.nan, None))]))
+
     def test_generate_population(self):
-        # two step test
         population = gen.generate_population(self.resources_dir, self.output_dir, False)
         self.assertEqual(1780, len(population.index))
         self.assertEqual(0, len(population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]))

@@ -41,6 +41,24 @@ def prepare_family_structure_from_voivodship(data_folder: Path) -> pd.DataFrame:
     return df2
 
 
+def temporary_hack(fcn):
+    # FIXME: introducing a hack that is actually going to destroy the probability distribution
+    # since it is not possible to have 3 generations in a household where only 2 people live
+    # but there is no distribution given for that
+
+    # the input data has to be replaced with a proper distribution that also depends on headcount to have these values
+    # correct
+    def inner(df, headcount, family_type, relationship, house_master):
+        out_df = fcn(df, headcount, family_type, relationship, house_master)
+
+        if len(out_df[out_df['nb_generations'] <= headcount]) > 0:
+            out_df = out_df[out_df['nb_generations'] <= headcount]
+            out_df['probability'] /= out_df['probability'].sum()
+        return out_df
+    return inner
+
+
+@temporary_hack
 def draw_generation_configuration_for_household(df, headcount, family_type, relationship, house_master):
     """
     Given a headcount, family type (0,1,2,3), relationship between families
@@ -124,6 +142,9 @@ def generate_household_indices(data_folder, population_size):
                                         sheet_name=households_count_xlsx.sheet_name)
     generations_configuration_df = pd.read_excel(os.path.join(data_folder, generations_configuration_xlsx.file_name),
                                                  sheet_name=generations_configuration_xlsx.sheet_name)
+    generations_configuration_df['nb_generations'] = generations_configuration_df['young'] \
+                                                     + generations_configuration_df['middle'] \
+                                                     + generations_configuration_df['elderly']
 
     _sanitize_households_count(households_count_df, population_size)
 
@@ -131,22 +152,21 @@ def generate_household_indices(data_folder, population_size):
         # family structure given this headcount
         fs_df = _filter_family_structures_for_household(family_structure_df, hc_row)
 
-        for j, row in fs_df.iterrows():
-            if row.total > 0:
-                household_headcount.extend([row.household_headcount] * row.total)
-                family_type.extend([row.family_type] * row.total)
-                relationship.extend([row.relationship] * row.total)
-                house_master.extend([row.house_master] * row.total)
+        for j, row in fs_df[fs_df.total > 0].iterrows():
+            household_headcount.extend([row.household_headcount] * row.total)
+            family_type.extend([row.family_type] * row.total)
+            relationship.extend([row.relationship] * row.total)
+            house_master.extend([row.house_master] * row.total)
 
-                gc_df = draw_generation_configuration_for_household(generations_configuration_df,
-                                                                    row.household_headcount,
-                                                                    row.family_type,
-                                                                    row.relationship,
-                                                                    row.house_master)
-                gc_idx = np.random.choice(gc_df.index.tolist(), p=gc_df.probability, size=row.total)
-                young.extend(gc_df.loc[gc_idx, 'young'])
-                middle.extend(gc_df.loc[gc_idx, 'middle'])
-                elderly.extend(gc_df.loc[gc_idx, 'elderly'])
+            gc_df = draw_generation_configuration_for_household(generations_configuration_df,
+                                                                row.household_headcount,
+                                                                row.family_type,
+                                                                row.relationship,
+                                                                row.house_master)
+            gc_idx = np.random.choice(gc_df.index.tolist(), p=gc_df.probability, size=row.total)
+            young.extend(gc_df.loc[gc_idx, 'young'])
+            middle.extend(gc_df.loc[gc_idx, 'middle'])
+            elderly.extend(gc_df.loc[gc_idx, 'elderly'])
 
     household_df = pd.DataFrame(data=dict(household_index=list(range(len(household_headcount))),
                                           household_headcount=household_headcount,

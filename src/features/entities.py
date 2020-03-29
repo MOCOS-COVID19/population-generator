@@ -33,6 +33,11 @@ data_types = {prop_idx: np.uint64,
 h_prop_household_index = 'household_index'
 h_prop_inhabitants = 'idx'
 h_prop_house_master_index = 'house_master_index'
+h_prop_household_headcount = 'household_headcount'
+h_prop_young = 'young'
+h_prop_middle = 'middle'
+h_prop_elderly = 'elderly'
+h_prop_unassigned_occupants = 'unassigned_occupants'
 household_columns = [h_prop_household_index, h_prop_inhabitants]
 
 
