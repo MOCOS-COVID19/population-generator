@@ -55,3 +55,15 @@ class TestPopulation(TestCase):
         population = gen.generate_population(self.resources_dir, self.output_dir, False)
         self.assertEqual(1780, len(population.index))
         self.assertEqual(0, len(population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]))
+
+    def test_assign_house_master(self):
+        population_size = 1780
+        households = gen.generate_households(self.resources_dir, self.output_dir, population_size)
+        population = gen.age_gender_generation_population_from_files(self.resources_dir)
+        population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
+        gen.assign_house_masters(households, population)
+        self.assertEqual(len(households[households[entities.h_prop_house_master_index] == -1].index), 0)
+
+        households_len = len(households.index)
+        masters_len = len(population[population[entities.prop_household] != entities.HOUSEHOLD_NOT_ASSIGNED].index)
+        self.assertEqual(households_len, masters_len)

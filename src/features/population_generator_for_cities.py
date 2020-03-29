@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -220,27 +221,28 @@ def assign_house_masters(households, population):
     households[entities.h_prop_house_master_index] = entities.HOUSEHOLD_NOT_ASSIGNED
     households[entities.h_prop_inhabitants] = ''
 
+    aged_19_and_less = ('18', '19')
+    aged_20_24 = ('20', '21', '22', '23', '24')
+    aged_25_29 = ('25', '26', '27', '28', '29')
+    unassigned_households = defaultdict(list)
+
     # given a household and its master's age and gender
     # select a person
     # set index of a person onto a household
     # set index of a household onto a person
     for idx, df23_row in tqdm(df23.iterrows(), desc='Master selection'):
         if df23_row.master_age == '19 lat i mniej':
-            subpopulation = population[population[entities.prop_age].isin((18, 19))
-                                       & (population[entities.prop_gender] == df23_row[
-                'master_gender'])].index.tolist()
+            subpopulation = population[population[entities.prop_age].isin(aged_19_and_less)
+                                       & (population[entities.prop_gender] == df23_row['master_gender'])].index.tolist()
         elif df23_row.master_age == '20-24':
-            subpopulation = population[population[entities.prop_age].isin((20, 21, 22, 23, 24))
-                                       & (population[entities.prop_gender] == df23_row[
-                'master_gender'])].index.tolist()
+            subpopulation = population[population[entities.prop_age].isin(aged_20_24)
+                                       & (population[entities.prop_gender] == df23_row['master_gender'])].index.tolist()
         elif df23_row.master_age == '25-29':
-            subpopulation = population[population[entities.prop_age].isin((25, 26, 27, 28, 29))
-                                       & (population[entities.prop_gender] == df23_row[
-                'master_gender'])].index.tolist()
+            subpopulation = population[population[entities.prop_age].isin(aged_25_29)
+                                       & (population[entities.prop_gender] == df23_row['master_gender'])].index.tolist()
         else:
             subpopulation = population[(population[entities.prop_age] == df23_row['master_age'])
-                                       & (population[entities.prop_gender] == df23_row[
-                'master_gender'])].index.tolist()
+                                       & (population[entities.prop_gender] == df23_row['master_gender'])].index.tolist()
         households_indices = households[(households.master_age == df23_row.master_age) &
                                         (households.master_gender == df23_row.master_gender)].index.tolist()
         try:
@@ -250,9 +252,30 @@ def assign_house_masters(households, population):
                 logging.info(f'THere are more masters than people in the population for {df23_row}. '
                              f'Making all people within this cluster masters.')
                 masters_indices = subpopulation
-                households_indices = np.random.choice(households_indices, replace=False, size=len(masters_indices))
+                covered_indices = np.random.choice(households_indices, replace=False, size=len(masters_indices))
+                not_covered_indices = set(households_indices).difference(set(covered_indices))
+                unassigned_households[df23_row['master_gender']].extend(not_covered_indices)
+                households_indices = covered_indices
+            elif str(e) == '\'a\' cannot be empty unless no samples are taken':
+                logging.error(f'Population for {df23_row} is empty.')
+                unassigned_households[df23_row['master_gender']].extend(households_indices)
+                continue
             else:
                 raise
+        population.loc[masters_indices, entities.prop_household] = households_indices
+        households.loc[households_indices, entities.h_prop_house_master_index] = masters_indices
+        households.loc[households_indices, entities.h_prop_inhabitants] = [str(x) for x in masters_indices]
+
+    # we may have some unassigned households
+    if len(unassigned_households) == 0:
+        return
+    youngsters = [str(x) for x in range(0, 18)]
+    for gender, households_indices in unassigned_households.items():
+        subpopulation = population[~population[entities.prop_age].isin(youngsters)
+                                   & (population[entities.prop_gender] == gender)
+                                   & (population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED)]\
+            .index.tolist()
+        masters_indices = np.random.choice(subpopulation, replace=False, size=len(households_indices))
         population.loc[masters_indices, entities.prop_household] = households_indices
         households.loc[households_indices, entities.h_prop_house_master_index] = masters_indices
         households.loc[households_indices, entities.h_prop_inhabitants] = [str(x) for x in masters_indices]
