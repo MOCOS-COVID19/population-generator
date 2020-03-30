@@ -195,7 +195,10 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
 
         households['master_age'] = masters_age
         households['master_gender'] = masters_gender
-        households.to_feather(str(households_ready_feather))
+        try:
+            households.to_feather(str(households_ready_feather))
+        except Exception as e:
+            logging.warning("Saving interim Feather failed, reason: " + str(e))
         households.to_excel(str(households_ready_xlsx), index=False)
 
     return households
