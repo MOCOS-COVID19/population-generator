@@ -1,8 +1,9 @@
-# this test should generate a small population
 from pathlib import Path
 from unittest import TestCase
 
 import numpy as np
+import pandas as pd
+import re
 
 from src.data import datasets
 from src.features import entities
@@ -17,21 +18,11 @@ class TestPopulation(TestCase):
         assert self.output_dir.is_dir()
 
     def tearDown(self) -> None:
-        if (self.resources_dir / datasets.households_xlsx.file_name).is_file():
-            (self.resources_dir / datasets.households_xlsx.file_name).unlink()
+        if (self.resources_dir / datasets.output_households_basic_feather.file_name).is_file():
+            (self.resources_dir / datasets.output_households_basic_feather.file_name).unlink()
         for file in self.output_dir.iterdir():
             if file.name != '.gitkeep':
                 file.unlink()
-
-    def test_generate_households(self):
-        population_size = 1780
-        households = gen.generate_households(self.resources_dir, self.output_dir, population_size)
-        self.assertGreaterEqual(households.household_headcount.sum(), population_size)
-        self.assertEqual(304, len(households[households.household_headcount == 1].index))
-        self.assertEqual(242, len(households[households.household_headcount == 2].index))
-        self.assertTrue((self.resources_dir / datasets.households_xlsx.file_name).is_file())
-        households['sanity_check'] = households['young'] + households['middle'] + households['elderly']
-        self.assertEqual(0, len(households[households['sanity_check'] > households['household_headcount']]))
 
     def test_age_gender_generation_population_from_files(self):
         population_size = 1780
@@ -55,11 +46,6 @@ class TestPopulation(TestCase):
 
         self.assertEqual(0, len(population[population.generation.isin(('', np.nan, None))]))
 
-    def test_generate_population(self):
-        population = gen.generate_population(self.resources_dir, self.output_dir, False)
-        self.assertEqual(1780, len(population.index))
-        self.assertEqual(0, len(population[population[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]))
-
     def test_assign_house_master(self):
         population_size = 1780
         households = gen.generate_households(self.resources_dir, self.output_dir, population_size)
@@ -71,3 +57,90 @@ class TestPopulation(TestCase):
         households_len = len(households.index)
         masters_len = len(population[population[entities.prop_household] != entities.HOUSEHOLD_NOT_ASSIGNED].index)
         self.assertEqual(households_len, masters_len)
+
+
+
+
+class TestGeneratePopulation(TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.resources_dir = Path(__file__).resolve().parents[0] / 'resources'
+        cls.output_dir = Path(__file__).resolve().parents[0] / 'output'
+        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, False)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if (cls.resources_dir / datasets.output_households_basic_feather.file_name).is_file():
+            (cls.resources_dir / datasets.output_households_basic_feather.file_name).unlink()
+        for file in cls.output_dir.iterdir():
+            if file.name != '.gitkeep':
+                file.unlink()
+
+    def test_population_size(self):
+        self.assertEqual(1780, len(self.population.index))
+
+    def test_no_homeless_in_population_df(self):
+        self.assertEqual(0, len(self.population[self.population[entities.prop_household]
+                                                == entities.HOUSEHOLD_NOT_ASSIGNED]))
+
+    def test_column_names_in_population_df(self):
+        self.assertEqual(entities.BasicNode.output_fields, self.population.reset_index().columns.tolist())
+
+    def test_column_names_in_population_csv(self):
+        df = pd.read_csv(self.output_dir / datasets.output_population_csv.file_name)
+        self.assertEqual(entities.BasicNode.output_fields, df.columns.tolist())
+
+    def test_no_homeless_in_population_csv(self):
+        df = pd.read_csv(self.output_dir / datasets.output_population_csv.file_name)
+        self.assertEqual(0, len(df[df[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED]))
+
+    def test_correct_household_columns(self):
+        self.assertEqual(entities.household_columns, self.households.columns.tolist())
+
+    def test_household_inhabitants_always_stored_as_list(self):
+        pattern = re.compile(r'\[\d+(,\s?\d+)*\]')
+        for _, val in self.households[entities.h_prop_inhabitants].iteritems():
+            self.assertRegex(val, pattern)
+
+    def test_no_double_household_assignment(self):
+        indices = set()
+        for _, val in self.households[entities.h_prop_inhabitants].iteritems():
+            indices.update(int(x) for x in val.strip('[]').split(', '))
+        self.assertEqual(len(self.population.index), len(indices))
+
+
+class TestGenerateHouseholds(TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.resources_dir = Path(__file__).resolve().parents[0] / 'resources'
+        cls.output_dir = Path(__file__).resolve().parents[0] / 'output'
+        cls.population_size = 1780
+        cls.households = gen.generate_households(cls.resources_dir, cls.output_dir, cls.population_size)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if (cls.resources_dir / datasets.output_households_basic_feather.file_name).is_file():
+            (cls.resources_dir / datasets.output_households_basic_feather.file_name).unlink()
+        for file in cls.output_dir.iterdir():
+            if file.name != '.gitkeep':
+                file.unlink()
+
+    def test_enough_places_for_all_people(self):
+        self.assertGreaterEqual(self.households.household_headcount.sum(), self.population_size)
+
+    def test_correct_numbers_of_households(self):
+        self.assertEqual(304, len(self.households[self.households.household_headcount == 1].index))
+        self.assertEqual(242, len(self.households[self.households.household_headcount == 2].index))
+
+    def test_existence_of_basic_file(self):
+        self.assertTrue((self.output_dir / datasets.output_households_basic_feather.file_name).is_file())
+
+    def test_existence_of_interim_file(self):
+        self.assertTrue((self.output_dir / datasets.output_households_interim_feather.file_name).is_file())
+
+    def test_no_more_generations_than_headcount(self):
+        self.households['sanity_check'] = self.households['young'] + self.households['middle'] \
+                                          + self.households['elderly']
+        self.assertEqual(0,
+                         len(self.households[self.households['sanity_check'] > self.households['household_headcount']]))
+

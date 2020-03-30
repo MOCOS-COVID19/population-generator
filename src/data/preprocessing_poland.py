@@ -115,7 +115,7 @@ def _filter_family_structures_for_household(family_structure_df, hc_row):
     return fs_df
 
 
-def generate_household_indices(data_folder, population_size):
+def generate_household_indices(data_folder: Path, output_folder: Path, population_size: int) -> pd.DataFrame:
     """Generates and saves to an excel file a dataframe of households. Each household consists of:
      * an index,
      * headcount,
@@ -126,21 +126,25 @@ def generate_household_indices(data_folder, population_size):
      * young - flag whether people younger than 30 years old live in a household
      * middle - flag, whether people between 30 and 59 inclusive live in a household
      * elderly - flag, whether people older than 59 live in a household
-     """
+
+    :param data_folder: data folder
+    :param output_folder: where to save an output file
+    :param population_size: size of a population needing accommodation
+    :return:
+    """
     household_headcount = []
     family_type = []
     relationship = []
     house_master = []
-    # family_structure_regex = []
     young = []
     middle = []
     elderly = []
 
-    family_structure_df = pd.read_excel(os.path.join(data_folder, household_family_structure_xlsx.file_name),
+    family_structure_df = pd.read_excel(str(data_folder / household_family_structure_xlsx.file_name),
                                         sheet_name=household_family_structure_xlsx.sheet_name)
-    households_count_df = pd.read_excel(os.path.join(data_folder, households_count_xlsx.file_name),
+    households_count_df = pd.read_excel(str(data_folder / households_count_xlsx.file_name),
                                         sheet_name=households_count_xlsx.sheet_name)
-    generations_configuration_df = pd.read_excel(os.path.join(data_folder, generations_configuration_xlsx.file_name),
+    generations_configuration_df = pd.read_excel(str(data_folder / generations_configuration_xlsx.file_name),
                                                  sheet_name=generations_configuration_xlsx.sheet_name)
     generations_configuration_df['nb_generations'] = generations_configuration_df['young'] \
                                                      + generations_configuration_df['middle'] \
@@ -175,7 +179,8 @@ def generate_household_indices(data_folder, population_size):
                                           house_master=house_master,
                                           young=young, middle=middle, elderly=elderly))
 
-    household_df.set_index('household_index').to_excel(os.path.join(data_folder, households_xlsx.file_name))
+    household_df.to_feather(str(output_folder / output_households_basic_feather.file_name))
+    return household_df
 
 
 def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
@@ -250,8 +255,6 @@ def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
 
 if __name__ == '__main__':
     project_dir = Path(__file__).resolve().parents[2]
-    voivodship_folder = os.path.join(project_dir, 'data', 'processed', 'poland', 'D')
-    data_folder = os.path.join(project_dir, 'data', 'processed', 'poland', 'WW')
-    # prepare_family_structure_from_voivodship(data_folder)
-    generate_household_indices(data_folder)
-    # generate_generations_configuration(voivodship_folder, data_folder)
+    city_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
+    prepare_family_structure_from_voivodship(city_folder)
+    generate_generations_configuration(city_folder)

@@ -14,7 +14,7 @@ from src.data import datasets, preprocessing_poland
 from src.features import entities
 from src.features.population_generator_common import (age_gender_population,
                                                       sample_from_distribution,
-                                                      cleanup_population, drop_obsolete_columns,
+                                                      rename_index, drop_obsolete_columns,
                                                       fix_empty_households, age_range_to_age,
                                                       permutation)
 
@@ -153,6 +153,7 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
     :param data_folder: path to a folder with data
     :param voivodship_folder: path to a folder with voivodship data
     :param output_folder: path to a folder where housedhols should be saved
+    :param population_size: size of a population to accommodate
     :return: a pandas dataframe with households to lodge the population.
     """
     households = None
@@ -164,19 +165,12 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
         logging.warning("Reading interim Feather failed, reason: " + str(e))
 
     if households is None:
-        try:
-            households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
-            households = pd.read_excel(str(households_ready_xlsx))
-        except Exception as e:
-            logging.warning("Reading interim Excel failed, reason: " + str(e))
-
-    if households is None:
         logging.warning("Recomputing...")
-        if not (data_folder / datasets.households_xlsx.file_name).is_file():
-            preprocessing_poland.generate_household_indices(str(data_folder), population_size)
-
-        households = pd.read_excel(str(data_folder / datasets.households_xlsx.file_name),
-                                   sheet_name=datasets.households_xlsx.sheet_name)
+        try:
+            households = pd.read_feather(str(output_folder / datasets.output_households_basic_feather.file_name))
+        except Exception as e:
+            logging.warning("Reading basic Feather failed, reason: " + str(e))
+            households = preprocessing_poland.generate_household_indices(data_folder, output_folder, population_size)
 
         masters_age = []
         masters_gender = []
@@ -199,7 +193,6 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
             households.to_feather(str(households_ready_feather))
         except Exception as e:
             logging.warning("Saving interim Feather failed, reason: " + str(e))
-        households.to_excel(str(households_ready_xlsx), index=False)
 
     return households
 
@@ -239,7 +232,7 @@ def assign_house_masters(households, population):
         .reset_index().rename(columns={0: 'total'})
 
     households[entities.h_prop_house_master_index] = entities.HOUSEHOLD_NOT_ASSIGNED
-    households[entities.h_prop_inhabitants] = ''
+    households[entities.h_prop_inhabitants] = '[]'
 
     aged_19_and_less = ('18', '19')
     aged_20_24 = ('20', '21', '22', '23', '24')
@@ -284,7 +277,7 @@ def assign_house_masters(households, population):
                 raise
         population.loc[masters_indices, entities.prop_household] = households_indices
         households.loc[households_indices, entities.h_prop_house_master_index] = masters_indices
-        households.loc[households_indices, entities.h_prop_inhabitants] = [str(x) for x in masters_indices]
+        households.loc[households_indices, entities.h_prop_inhabitants] = [str([x]) for x in masters_indices]
 
     # we may have some unassigned households
     if len(unassigned_households) == 0:
@@ -298,7 +291,7 @@ def assign_house_masters(households, population):
         masters_indices = np.random.choice(subpopulation, replace=False, size=len(households_indices))
         population.loc[masters_indices, entities.prop_household] = households_indices
         households.loc[households_indices, entities.h_prop_house_master_index] = masters_indices
-        households.loc[households_indices, entities.h_prop_inhabitants] = [str(x) for x in masters_indices]
+        households.loc[households_indices, entities.h_prop_inhabitants] = [str([x]) for x in masters_indices]
 
     households[entities.h_prop_unassigned_occupants] = households[entities.h_prop_household_headcount] - 1
 
@@ -495,7 +488,7 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                                                                                           entities.prop_gender]])
 
         logging.info('Cleaning up the population dataframe')
-        population = age_range_to_age(drop_obsolete_columns(population, entities.columns))
+        population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)), entities.prop_idx)
         # households = fix_empty_households(households)
     finally:
         logging.info('Saving a population to a file... ')
@@ -507,7 +500,7 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
         households = drop_obsolete_columns(households, entities.household_columns)
         households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
 
-    return population
+    return population, households
 
 
 def generate(data_folder: Path, simulations_folder: Path = None, other_features: bool = True) -> pd.DataFrame:
@@ -518,6 +511,7 @@ def generate(data_folder: Path, simulations_folder: Path = None, other_features:
     :param simulations_folder: the path to a folder where population and households for this simulation are to be saved.
     If the folder already exists and contains households.xlsx then households are read from the file. If the folder
     already exists and contains population.xslx file then a population is read from the file.
+    :param other_features: whether to generate other features
     :return: a pandas dataframe with a population generated from the data in data_folder
     """
     # simulations folder

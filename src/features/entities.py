@@ -2,8 +2,7 @@
 with basic data of an individual and all data, respectively."""
 import numpy as np
 from enum import Enum
-from typing import Optional
-
+from typing import Optional, List
 
 prop_idx = 'idx'
 prop_age = 'age'
@@ -85,7 +84,17 @@ PUBLIC_TRANSPORT_USAGE_NOT_SET = -1
 PUBLIC_TRANSPORT_DURATION_NOT_SET = -1
 
 
-class BasicNode(dict):
+class BasicNodeMeta(type):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cls._output_fields = [prop_idx, prop_age, prop_gender, prop_household]
+
+    @property
+    def output_fields(cls):
+        return cls._output_fields
+
+
+class BasicNode(dict, metaclass=BasicNodeMeta):
 
     def __init__(self, idx: int, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
@@ -161,8 +170,14 @@ class BasicNode(dict):
     def elderly(self) -> bool:
         return self.age_generation == 'elderly'
 
+#    @classmethod
+#    def output_fields(cls) -> List[str]:
+#        return cls._output_fields
+
 
 class Node(BasicNode):
+    _output_fields = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
+                      prop_public_transport_usage, prop_public_transport_duration, prop_profession]
 
     def __init__(self, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
@@ -235,3 +250,6 @@ class Node(BasicNode):
     def profession(self, profession: int) -> None:
         self[prop_profession] = profession
 
+    @classmethod
+    def output_fields(cls) -> List[str]:
+        return cls._output_fields

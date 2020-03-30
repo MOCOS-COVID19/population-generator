@@ -74,6 +74,11 @@ def age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def rename_index(df: pd.DataFrame, index_name: str) -> pd.DataFrame:
+    df.index.name = index_name
+    return df
+
+
 def fix_homeless(df: pd.DataFrame) -> pd.DataFrame:
     return df[df[entities.prop_household] != -1]
 
