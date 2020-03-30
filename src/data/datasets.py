@@ -13,6 +13,10 @@ class XlsxFile:
 class CsvFile:
     file_name: str
 
+@dataclass
+class FeatherFile:
+    file_name: str
+
 age_gender_xlsx = XlsxFile('age_gender.xlsx', 'processed')
 families_and_children_xlsx = XlsxFile('families_and_children.xlsx', 'processed')
 families_per_household_xlsx = XlsxFile('families_per_household.xlsx', 'Sheet1')
@@ -26,6 +30,7 @@ households_old_xlsx = XlsxFile('households_old.xlsx', 'Sheet1')
 households_by_master_xlsx = XlsxFile('households_by_master.xlsx', 'House_Master')
 
 output_households_interim_xlsx = XlsxFile('households_interim.xlsx', 'Sheet1')
+output_households_interim_feather = FeatherFile('households_interim.feather')
 output_households_xlsx = XlsxFile('households.xlsx', 'Sheet1')
 output_population_xlsx = XlsxFile('population.xlsx', 'Sheet1')
 

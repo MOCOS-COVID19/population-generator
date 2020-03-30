@@ -155,13 +155,23 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
     :param output_folder: path to a folder where housedhols should be saved
     :return: a pandas dataframe with households to lodge the population.
     """
-    try:
-        households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
-        households = pd.read_excel(str(households_ready_xlsx))
-    except Exception as e:
-        logging.warning("Reading interim Excel failed, reason: " + str(e))
-        logging.warning("Recomputing...")
+    households = None
 
+    try:
+        households_ready_feather = output_folder / datasets.output_households_interim_feather.file_name
+        households = pd.read_feather(str(households_ready_feather))
+    except Exception as e:
+        logging.warning("Reading interim Feather failed, reason: " + str(e))
+
+    if households is None:
+        try:
+            households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
+            households = pd.read_excel(str(households_ready_xlsx))
+        except Exception as e:
+            logging.warning("Reading interim Excel failed, reason: " + str(e))
+
+    if households is None:
+        logging.warning("Recomputing...")
         if not (data_folder / datasets.households_xlsx.file_name).is_file():
             preprocessing_poland.generate_household_indices(str(data_folder), population_size)
 
@@ -185,6 +195,7 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
 
         households['master_age'] = masters_age
         households['master_gender'] = masters_gender
+        households.to_feather(str(households_ready_feather))
         households.to_excel(str(households_ready_xlsx), index=False)
 
     return households
