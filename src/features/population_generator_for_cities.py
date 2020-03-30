@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
+import random
 
 from src.data import datasets, preprocessing_poland
 from src.features import entities
@@ -154,9 +155,23 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
     :param output_folder: path to a folder where housedhols should be saved
     :return: a pandas dataframe with households to lodge the population.
     """
-    households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
-    if not households_ready_xlsx.is_file():
+    households = None
 
+    try:
+        households_ready_feather = output_folder / datasets.output_households_interim_feather.file_name
+        households = pd.read_feather(str(households_ready_feather))
+    except Exception as e:
+        logging.warning("Reading interim Feather failed, reason: " + str(e))
+
+    if households is None:
+        try:
+            households_ready_xlsx = output_folder / datasets.output_households_interim_xlsx.file_name
+            households = pd.read_excel(str(households_ready_xlsx))
+        except Exception as e:
+            logging.warning("Reading interim Excel failed, reason: " + str(e))
+
+    if households is None:
+        logging.warning("Recomputing...")
         if not (data_folder / datasets.households_xlsx.file_name).is_file():
             preprocessing_poland.generate_household_indices(str(data_folder), population_size)
 
@@ -171,7 +186,7 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
             str(data_folder / datasets.voivodship_cities_households_by_master_xlsx.file_name),
             sheet_name=datasets.voivodship_cities_households_by_master_xlsx.sheet_name)
 
-        for idx, household_row in households.iterrows():
+        for idx, household_row in tqdm(households.iterrows(), total=len(households)):
             masters = narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row)
             p = masters['Count'] / masters['Count'].sum()
             index = np.random.choice(masters.index.tolist(), p=p)
@@ -180,9 +195,11 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
 
         households['master_age'] = masters_age
         households['master_gender'] = masters_gender
+        try:
+            households.to_feather(str(households_ready_feather))
+        except Exception as e:
+            logging.warning("Saving interim Feather failed, reason: " + str(e))
         households.to_excel(str(households_ready_xlsx), index=False)
-    else:
-        households = pd.read_excel(str(households_ready_xlsx))
 
     return households
 
@@ -330,15 +347,20 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
     _homeless_indices = {'young': homeless[homeless.generation == 'young'].index.tolist(),
                          'middle': homeless[homeless.generation == 'middle'].index.tolist(),
                          'elderly': homeless[homeless.generation == 'elderly'].index.tolist()}
-    homeless_orderings = {key: permutation(value) for key, value in _homeless_indices.items()}
+    for homeless_l in _homeless_indices.values():
+        random.shuffle(homeless_l)
 
     logging.info('Selecting households with housemasters and headcount greater than 1...')
     households2 = households[(households.household_headcount > 1)
                              & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
     households_interim = defaultdict(list)
 
+    households_prop_unassigned_occupants_idx = households.columns.get_loc(entities.h_prop_unassigned_occupants)
+    households_prop_inhabitants_idx = households.columns.get_loc(entities.h_prop_inhabitants)
+    population_prop_household_idx = population.columns.get_loc(entities.prop_household)
+
     try:
-        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments'):
+        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments', total=len(households2)):
             inhabitants = [household_row.house_master_index]
             # lodged_headcount = 1
             try:
@@ -359,8 +381,8 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             if household_row.middle == 1 and hm_generation != age_group \
                     and len(inhabitants) < household_row.household_headcount:
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
@@ -369,8 +391,8 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             if household_row.elderly == 1 and hm_generation != age_group \
                     and len(inhabitants) < household_row.household_headcount:
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
@@ -380,15 +402,15 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                     and len(inhabitants) < household_row.household_headcount:
 
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
 
             sample_size = int(household_row.household_headcount - len(inhabitants))
-            households.loc[household_row.household_index, entities.h_prop_unassigned_occupants] = sample_size
-            households.loc[household_row.household_index, entities.h_prop_inhabitants] = str(inhabitants)
+            households.iat[household_row.household_index, households_prop_unassigned_occupants_idx] = sample_size
+            households.iat[household_row.household_index, households_prop_inhabitants_idx] = str(inhabitants)
 
             # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
             if sample_size > 0:
@@ -409,18 +431,19 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             df = narrow_age_group(current_households, young, middle, elderly)
             for i, row in tqdm(df.iterrows(), desc=f'Lodging {age_group} population'):
                 size = int(row[entities.h_prop_unassigned_occupants])
-                new_inhabitants = list(itertools.islice(homeless_orderings[age_group], size))
+                new_inhabitants = [_homeless_indices[age_group].pop() for _ in range(min(size, len(_homeless_indices[age_group])))]
                 if len(new_inhabitants) == 0:
                     logging.warning(f'No more people within {age_group} group')
                     return
-                df_h.loc[row.household_index, entities.h_prop_inhabitants] = str(
+                df_h.iat[row.household_index, households_prop_inhabitants_idx] = str(
                     df_interim[row.household_index] + new_inhabitants)
                 if len(new_inhabitants) == size:
                     df_interim.pop(row.household_index)
                 else:
                     df_interim[row.household_index] = size - len(new_inhabitants)
-                df_h.loc[row.household_index, entities.h_prop_unassigned_occupants] -= len(new_inhabitants)
-                df_p.loc[new_inhabitants, entities.prop_household] = row.household_index
+                df_h.iat[row.household_index, households_prop_unassigned_occupants_idx] -= len(new_inhabitants)
+                for new_inhabitant in new_inhabitants:
+                    df_p.iat[new_inhabitant, population_prop_household_idx] = row.household_index
 
         process_single_age_group(households, population, households_interim, entities.AgeGroup.young.name, 1, 0, 0)
         process_single_age_group(households, population, households_interim, entities.AgeGroup.middle.name, 0, 1, 0)
@@ -438,14 +461,15 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                 if len(new_inhabitants) == 0:
                     logging.error(f'Not enough population to lodge in households for {age_groups}')
                     return
-                df_h.loc[row.household_index, entities.h_prop_inhabitants] = str(
+                df_h.iat[row.household_index, households_prop_inhabitants_idx] = str(
                     df_interim[row.household_index] + new_inhabitants)
                 if len(new_inhabitants) == size:
                     df_interim.pop(row.household_index)
                 else:
                     df_interim[row.household_index] = size - len(new_inhabitants)
-                df_h.loc[row.household_index, entities.h_prop_unassigned_occupants] -= len(new_inhabitants)
-                df_p.loc[new_inhabitants, entities.prop_household] = row.household_index
+                df_h.iat[row.household_index, households_prop_unassigned_occupants_idx] -= len(new_inhabitants)
+                for new_inhabitant in new_inhabitants:
+                    df_p.iat[new_inhabitant, population_prop_household_idx] = row.household_index
 
         process_mulitple_age_groups(households, population, households_interim,
                                     (entities.AgeGroup.young.name, entities.AgeGroup.middle.name), 1, 1, 0)
