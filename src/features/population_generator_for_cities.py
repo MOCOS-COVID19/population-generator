@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
+import random
 
 from src.data import datasets, preprocessing_poland
 from src.features import entities
@@ -171,7 +172,7 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
             str(data_folder / datasets.voivodship_cities_households_by_master_xlsx.file_name),
             sheet_name=datasets.voivodship_cities_households_by_master_xlsx.sheet_name)
 
-        for idx, household_row in households.iterrows():
+        for idx, household_row in tqdm(households.iterrows(), total=len(households)):
             masters = narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row)
             p = masters['Count'] / masters['Count'].sum()
             index = np.random.choice(masters.index.tolist(), p=p)
@@ -330,15 +331,20 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
     _homeless_indices = {'young': homeless[homeless.generation == 'young'].index.tolist(),
                          'middle': homeless[homeless.generation == 'middle'].index.tolist(),
                          'elderly': homeless[homeless.generation == 'elderly'].index.tolist()}
-    homeless_orderings = {key: permutation(value) for key, value in _homeless_indices.items()}
+    for homeless_l in _homeless_indices.values():
+        random.shuffle(homeless_l)
 
     logging.info('Selecting households with housemasters and headcount greater than 1...')
     households2 = households[(households.household_headcount > 1)
                              & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
     households_interim = defaultdict(list)
 
+    households_prop_unassigned_occupants_idx = households.columns.get_loc(entities.h_prop_unassigned_occupants)
+    households_prop_inhabitants_idx = households.columns.get_loc(entities.h_prop_inhabitants)
+    population_prop_household_idx = population.columns.get_loc(entities.prop_household)
+
     try:
-        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments'):
+        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments', total=len(households2)):
             inhabitants = [household_row.house_master_index]
             # lodged_headcount = 1
             try:
@@ -359,8 +365,8 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             if household_row.middle == 1 and hm_generation != age_group \
                     and len(inhabitants) < household_row.household_headcount:
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
@@ -369,8 +375,8 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             if household_row.elderly == 1 and hm_generation != age_group \
                     and len(inhabitants) < household_row.household_headcount:
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
@@ -380,15 +386,15 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                     and len(inhabitants) < household_row.household_headcount:
 
                 try:
-                    homeless_idx = next(homeless_orderings[age_group])
-                    population.loc[homeless_idx, entities.prop_household] = household_row.household_index
+                    homeless_idx = _homeless_indices[age_group].pop()
+                    population.iat[homeless_idx, population_prop_household_idx] = household_row.household_index
                     inhabitants.append(homeless_idx)
                 except StopIteration:
                     logging.error(f'No more people within {age_group} generation')
 
             sample_size = int(household_row.household_headcount - len(inhabitants))
-            households.loc[household_row.household_index, entities.h_prop_unassigned_occupants] = sample_size
-            households.loc[household_row.household_index, entities.h_prop_inhabitants] = str(inhabitants)
+            households.iat[household_row.household_index, households_prop_unassigned_occupants_idx] = sample_size
+            households.iat[household_row.household_index, households_prop_inhabitants_idx] = str(inhabitants)
 
             # logging.info(f'Population to draw from: {population_to_draw_from[:10]}, sample size {sample_size}')
             if sample_size > 0:
@@ -409,7 +415,7 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             df = narrow_age_group(current_households, young, middle, elderly)
             for i, row in tqdm(df.iterrows(), desc=f'Lodging {age_group} population'):
                 size = int(row[entities.h_prop_unassigned_occupants])
-                new_inhabitants = list(itertools.islice(homeless_orderings[age_group], size))
+                new_inhabitants = [_homeless_indices[age_group].pop() for _ in range(size)]
                 if len(new_inhabitants) == 0:
                     logging.warning(f'No more people within {age_group} group')
                     return
