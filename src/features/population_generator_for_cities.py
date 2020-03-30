@@ -415,7 +415,7 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
             df = narrow_age_group(current_households, young, middle, elderly)
             for i, row in tqdm(df.iterrows(), desc=f'Lodging {age_group} population'):
                 size = int(row[entities.h_prop_unassigned_occupants])
-                new_inhabitants = [_homeless_indices[age_group].pop() for _ in range(size)]
+                new_inhabitants = [_homeless_indices[age_group].pop() for _ in range(min(size, len(_homeless_indices[age_group])))]
                 if len(new_inhabitants) == 0:
                     logging.warning(f'No more people within {age_group} group')
                     return
@@ -445,14 +445,15 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                 if len(new_inhabitants) == 0:
                     logging.error(f'Not enough population to lodge in households for {age_groups}')
                     return
-                df_h.loc[row.household_index, entities.h_prop_inhabitants] = str(
+                df_h.iat[row.household_index, households_prop_inhabitants_idx] = str(
                     df_interim[row.household_index] + new_inhabitants)
                 if len(new_inhabitants) == size:
                     df_interim.pop(row.household_index)
                 else:
                     df_interim[row.household_index] = size - len(new_inhabitants)
-                df_h.loc[row.household_index, entities.h_prop_unassigned_occupants] -= len(new_inhabitants)
-                df_p.loc[new_inhabitants, entities.prop_household] = row.household_index
+                df_h.iat[row.household_index, households_prop_unassigned_occupants_idx] -= len(new_inhabitants)
+                for new_inhabitant in new_inhabitants:
+                    df_p.iat[new_inhabitant, population_prop_household_idx] = row.household_index
 
         process_mulitple_age_groups(households, population, households_interim,
                                     (entities.AgeGroup.young.name, entities.AgeGroup.middle.name), 1, 1, 0)
