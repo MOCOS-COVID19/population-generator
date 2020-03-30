@@ -419,14 +419,15 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                 if len(new_inhabitants) == 0:
                     logging.warning(f'No more people within {age_group} group')
                     return
-                df_h.loc[row.household_index, entities.h_prop_inhabitants] = str(
+                df_h.iat[row.household_index, households_prop_inhabitants_idx] = str(
                     df_interim[row.household_index] + new_inhabitants)
                 if len(new_inhabitants) == size:
                     df_interim.pop(row.household_index)
                 else:
                     df_interim[row.household_index] = size - len(new_inhabitants)
-                df_h.loc[row.household_index, entities.h_prop_unassigned_occupants] -= len(new_inhabitants)
-                df_p.loc[new_inhabitants, entities.prop_household] = row.household_index
+                df_h.iat[row.household_index, households_prop_unassigned_occupants_idx] -= len(new_inhabitants)
+                for new_inhabitant in new_inhabitants:
+                    df_p.iat[new_inhabitant, population_prop_household_idx] = row.household_index
 
         process_single_age_group(households, population, households_interim, entities.AgeGroup.young.name, 1, 0, 0)
         process_single_age_group(households, population, households_interim, entities.AgeGroup.middle.name, 0, 1, 0)
