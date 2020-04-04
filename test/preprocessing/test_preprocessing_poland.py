@@ -1,8 +1,7 @@
 from unittest import TestCase
-import pandas as pd
 from pathlib import Path
 from src.data.datasets import generations_configuration_xlsx
-from src.data import preprocessing_poland as poland
+from src.preprocessing import preprocessing_poland as poland
 
 
 class TestGenerationConfiguration(TestCase):

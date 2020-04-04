@@ -1,12 +1,8 @@
 from unittest import TestCase
-from src.features import population_generator_for_cities as population
-from src.features import entities
-from src.data import datasets
-import scipy.stats
-import numpy as np
+from src.generation import population_generator_for_cities as population
+from src.data import datasets, entities
 import pandas as pd
 from pathlib import Path
-
 
 
 class TestSocialCompatenece(TestCase):

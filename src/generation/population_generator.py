@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.features.entities import BasicNode, GENDERS
+from src.data.entities import BasicNode, GENDERS
 from src.features.population_generator_common import nodes_to_dataframe, cleanup_population
 
 

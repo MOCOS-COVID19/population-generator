@@ -8,9 +8,9 @@ from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.features.entities import BasicNode, GENDERS, Gender
-from src.features.population_generator import PopulationGenerator
-from src.features.population_generator_common import prepare_simulations_folder, get_age_gender_df
+from src.data.entities import BasicNode, GENDERS, Gender
+from src.generation.population_generator import PopulationGenerator
+from src.generation.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
 def transform(subpopulation_df : pd.DataFrame) -> Tuple[List[Tuple[int, Gender]], List[float]]:
     ret = []

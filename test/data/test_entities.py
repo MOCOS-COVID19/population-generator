@@ -1,5 +1,5 @@
 import networkx as nx
-from src.features import entities
+from src.data import entities
 from unittest import TestCase
 
 
