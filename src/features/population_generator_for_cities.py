@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
-import itertools
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,8 +15,7 @@ from src.features import entities
 from src.features.population_generator_common import (age_gender_population,
                                                       sample_from_distribution,
                                                       rename_index, drop_obsolete_columns,
-                                                      fix_empty_households, age_range_to_age,
-                                                      permutation)
+                                                      age_range_to_age)
 
 
 def generate_social_competence(sample_size, distribution_name='norm', loc=0, scale=1):
@@ -308,15 +307,17 @@ def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFra
     return pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
 
 
-def generate_population(data_folder: Path, output_folder: Path, other_features: bool = True):
+def generate_population(data_folder: Path, output_folder: Path, other_features: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # if population already generated, read from file
     population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
-    if population_ready_xlsx.is_file():
-        return pd.read_excel(str(population_ready_xlsx))
+    households_ready_xlsx = output_folder / datasets.output_households_xlsx.file_name
+    if population_ready_xlsx.is_file() and households_ready_xlsx.is_file():
+        return pd.read_excel(str(population_ready_xlsx)), pd.read_excel(str(households_ready_xlsx))
 
     population_ready_csv = output_folder / datasets.output_population_csv.file_name
-    if population_ready_csv.is_file():
-        return pd.read_csv(str(population_ready_csv))
+    households_ready_csv = output_folder / datasets.output_households_csv.file_name
+    if population_ready_csv.is_file() and households_ready_csv.is_file():
+        return pd.read_csv(str(population_ready_csv)), pd.read_csv(str(households_ready_csv))
 
     # if not generated yet, create from scratch
     # get all population with their age and gender
@@ -442,15 +443,17 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
         process_single_age_group(households, population, households_interim, entities.AgeGroup.middle.name, 0, 1, 0)
         process_single_age_group(households, population, households_interim, entities.AgeGroup.elderly.name, 0, 0, 1)
 
-        def process_mulitple_age_groups(df_h, df_p, df_interim, age_groups, young, middle, elderly):
+        def process_multiple_age_groups(df_h, df_p, df_interim, age_groups, young, middle, elderly):
             current_households = df_h.loc[df_interim.keys()]
             homeless_indices = df_p[(df_p[entities.prop_household] == entities.HOUSEHOLD_NOT_ASSIGNED)
                                     & (df_p['generation'].isin(age_groups))].index.tolist()
-            people_generator = permutation(homeless_indices)
-            for i, row in tqdm(narrow_age_group(current_households, young, middle, elderly).iterrows(),
+            random.shuffle(homeless_indices)
+            _admissible_households = narrow_age_group(current_households, young, middle, elderly)
+
+            for i, row in tqdm(_admissible_households.iterrows(), total=len(_admissible_households.index),
                                desc=f'Lodging {age_groups} population'):
                 size = int(row[entities.h_prop_unassigned_occupants])
-                new_inhabitants = list(itertools.islice(people_generator, size))
+                new_inhabitants = [homeless_indices.pop() for _ in range(min(size, len(homeless_indices)))]
                 if len(new_inhabitants) == 0:
                     logging.error(f'Not enough population to lodge in households for {age_groups}')
                     return
@@ -464,13 +467,13 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                 for new_inhabitant in new_inhabitants:
                     df_p.iat[new_inhabitant, population_prop_household_idx] = row.household_index
 
-        process_mulitple_age_groups(households, population, households_interim,
+        process_multiple_age_groups(households, population, households_interim,
                                     (entities.AgeGroup.young.name, entities.AgeGroup.middle.name), 1, 1, 0)
-        process_mulitple_age_groups(households, population, households_interim,
+        process_multiple_age_groups(households, population, households_interim,
                                     (entities.AgeGroup.middle.name, entities.AgeGroup.elderly.name), 0, 1, 1)
-        process_mulitple_age_groups(households, population, households_interim,
+        process_multiple_age_groups(households, population, households_interim,
                                     (entities.AgeGroup.young.name, entities.AgeGroup.elderly.name), 1, 0, 1)
-        process_mulitple_age_groups(households, population, households_interim, [x.name for x in entities.AgeGroup], 1,
+        process_multiple_age_groups(households, population, households_interim, [x.name for x in entities.AgeGroup], 1,
                                     1, 1)
 
         logging.info('Other features')

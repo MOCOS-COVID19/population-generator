@@ -1,12 +1,14 @@
-import os
-import pandas as pd
-from pathlib import Path
-from openpyxl import load_workbook
-from contextlib import closing
-from src.data.datasets import *
-import numpy as np
-from xlrd import XLRDError
 import logging
+from contextlib import closing
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from openpyxl import load_workbook
+from xlrd import XLRDError
+
+from src.data.datasets import *
 
 
 def prepare_family_structure_from_voivodship(data_folder: Path) -> pd.DataFrame:
@@ -55,6 +57,7 @@ def temporary_hack(fcn):
             out_df = out_df[out_df['nb_generations'] <= headcount]
             out_df['probability'] /= out_df['probability'].sum()
         return out_df
+
     return inner
 
 
@@ -79,7 +82,7 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
     if family_type == 2:
         if house_master not in (np.nan, '', None):
             out_df = df[(df.family_type == family_type) & (df.relationship == relationship)
-                      & (df.house_master == house_master)]
+                        & (df.house_master == house_master)]
             if len(out_df) > 0:
                 return out_df
         if relationship not in (np.nan, '', None):
@@ -97,11 +100,11 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
 
 
 def _sanitize_households_count(households_count_df, population_size):
-    old_population = (households_count_df['nb_of_people_in_household']*households_count_df['nb_of_households']).sum()
+    old_population = (households_count_df['nb_of_people_in_household'] * households_count_df['nb_of_households']).sum()
     households_count_df['nb_of_households'] *= (population_size / old_population)
     households_count_df['nb_of_households'] = households_count_df['nb_of_households'].apply(np.ceil).astype(int)
-    assert (households_count_df['nb_of_people_in_household']*households_count_df['nb_of_households']).sum() \
-        >= population_size
+    assert (households_count_df['nb_of_people_in_household'] * households_count_df['nb_of_households']).sum() \
+           >= population_size
 
 
 def _filter_family_structures_for_household(family_structure_df, hc_row):
@@ -117,6 +120,15 @@ def _filter_family_structures_for_household(family_structure_df, hc_row):
             fs_df.loc[np.random.choice(fs_df.index.tolist()), 'total'] += difference_due_to_rounding
 
     return fs_df
+
+
+def get_generations_configuration_df(data_folder: Path, xlsx_file: XlsxFile) -> pd.DataFrame:
+    generations_configuration_df = pd.read_excel(str(data_folder / xlsx_file.file_name),
+                                                 sheet_name=xlsx_file.sheet_name)
+    generations_configuration_df['nb_generations'] = generations_configuration_df['young'] \
+                                                     + generations_configuration_df['middle'] \
+                                                     + generations_configuration_df['elderly']
+    return generations_configuration_df
 
 
 def generate_household_indices(data_folder: Path, output_folder: Path, population_size: int) -> pd.DataFrame:
@@ -148,15 +160,11 @@ def generate_household_indices(data_folder: Path, output_folder: Path, populatio
                                         sheet_name=household_family_structure_xlsx.sheet_name)
     households_count_df = pd.read_excel(str(data_folder / households_count_xlsx.file_name),
                                         sheet_name=households_count_xlsx.sheet_name)
-    generations_configuration_df = pd.read_excel(str(data_folder / generations_configuration_xlsx.file_name),
-                                                 sheet_name=generations_configuration_xlsx.sheet_name)
-    generations_configuration_df['nb_generations'] = generations_configuration_df['young'] \
-                                                     + generations_configuration_df['middle'] \
-                                                     + generations_configuration_df['elderly']
+    generations_configuration_df = get_generations_configuration_df(data_folder, generations_configuration_xlsx)
 
     _sanitize_households_count(households_count_df, population_size)
 
-    for i, hc_row in households_count_df.iterrows():
+    for i, hc_row in tqdm(households_count_df.iterrows(), total=len(households_count_df.index)):
         # family structure given this headcount
         fs_df = _filter_family_structures_for_household(family_structure_df, hc_row)
 
@@ -248,7 +256,7 @@ def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
         writer.save()
 
     # update with probabilities
-    df = pivoted.groupby(by=['family_type', 'relationship', 'house_master'])['households'].sum().reset_index()\
+    df = pivoted.groupby(by=['family_type', 'relationship', 'house_master'])['households'].sum().reset_index() \
         .rename(columns={'households': 'total'})
     pivoted = pivoted.merge(df, how='left', on=['family_type', 'relationship', 'house_master'])
     pivoted['probability'] = pivoted['households'] / pivoted['total']

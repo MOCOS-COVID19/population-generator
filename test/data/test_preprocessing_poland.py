@@ -1,7 +1,7 @@
 from unittest import TestCase
 import pandas as pd
 from pathlib import Path
-from src.data.datasets import voivodship_cities_generations_configuration_xlsx
+from src.data.datasets import generations_configuration_xlsx
 from src.data import preprocessing_poland as poland
 
 
@@ -11,10 +11,9 @@ class TestGenerationConfiguration(TestCase):
         project_dir = Path(__file__).resolve().parents[2]
         data_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
         assert data_folder.is_dir()
-        assert (data_folder / voivodship_cities_generations_configuration_xlsx.file_name).is_file()
-        cls.generations_configuration_df = pd.read_excel(
-            str(data_folder / voivodship_cities_generations_configuration_xlsx.file_name),
-            sheet_name=voivodship_cities_generations_configuration_xlsx.sheet_name)
+        assert (data_folder / generations_configuration_xlsx.file_name).is_file()
+        cls.generations_configuration_df = poland.get_generations_configuration_df(
+            data_folder, generations_configuration_xlsx)
 
     def test_find_configurations_for_family_type_1_selfcontained(self):
         # df, headcount, family_type, relationship, house_master):
@@ -58,7 +57,7 @@ class TestGenerationConfiguration(TestCase):
 
     def test_find_configurations_for_family_type_0_one_person(self):
         df = poland.draw_generation_configuration_for_household(self.generations_configuration_df, 1, 0, '', '')
-        self.assertEqual(7, len(df.index))
+        self.assertEqual(3, len(df.index))  # only those with nb_generations <= headcount [here: 1]
 
     def test_find_configurations_for_family_type_1_many_people(self):
         df = poland.draw_generation_configuration_for_household(self.generations_configuration_df, 3, 0, '', '')

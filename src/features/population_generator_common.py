@@ -110,9 +110,3 @@ def get_age_gender_df_with_generations(data_folder: Path,
         -> pd.DataFrame:
     generations_df = pd.read_excel(str(data_folder.parent / datasets.generations_xlsx.file_name))
     return pd.merge(get_age_gender_df(data_folder, sheet_name), generations_df, left_on='Age', right_on='age')
-
-
-def permutation(sample):
-    ordering = np.random.permutation(sample)
-    for index in ordering:
-        yield index

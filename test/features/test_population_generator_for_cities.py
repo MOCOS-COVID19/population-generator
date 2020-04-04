@@ -59,8 +59,6 @@ class TestPopulation(TestCase):
         self.assertEqual(households_len, masters_len)
 
 
-
-
 class TestGeneratePopulation(TestCase):
     @classmethod
     def setUpClass(cls) -> None:
