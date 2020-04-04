@@ -30,8 +30,6 @@ class PolishPopulationGenerator(PopulationGenerator):
         self.adults_df = self.age_gender_df[self.age_gender_df['Age'] >= 18].reset_index(drop=True)
         self.adults_df['total_probability'] = self.adults_df['Total'] / self.adults_df['Total'].sum()
         self.households_headcount_ac_df = self._preprocess_household_headcount_ac()
-        # self.number_of_households = self.households_headcount_ac_df.households.sum()
-        print(self.number_of_households)
 
     @property
     def number_of_households(self) -> int:
