@@ -78,10 +78,14 @@ def draw_generation_configuration_for_household(df, headcount, family_type, rela
         return df[(df.family_type == family_type) & (df.relationship == relationship)]
     if family_type == 2:
         if house_master not in (np.nan, '', None):
-            return df[(df.family_type == family_type) & (df.relationship == relationship)
+            out_df = df[(df.family_type == family_type) & (df.relationship == relationship)
                       & (df.house_master == house_master)]
+            if len(out_df) > 0:
+                return out_df
         if relationship not in (np.nan, '', None):
-            return df[(df.family_type == family_type) & (df.relationship == relationship)]
+            out_df = df[(df.family_type == family_type) & (df.relationship == relationship)]
+            if len(out_df) > 0:
+                return out_df
         return df[(df.family_type == family_type)]
     if family_type == 3:
         return df[(df.family_type == family_type)]
