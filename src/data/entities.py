@@ -14,12 +14,16 @@ prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
 prop_ishealthcare = 'ishealthcare'
+prop_powiat = 'powiat_code'
+prop_subregion = 'subregion_code'
+prop_subregion_capital = 'subregion_capital_powiats'
 
 # auxiliary
 prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
+           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare, prop_powiat]
+
 data_types = {prop_idx: np.uint64,
               prop_age: np.int8,
               prop_gender: np.int8,
@@ -28,7 +32,8 @@ data_types = {prop_idx: np.uint64,
               prop_public_transport_usage: np.int8,
               prop_public_transport_duration: np.float,
               prop_household: np.uint64,
-              prop_profession: np.uint64}
+              prop_profession: np.uint64,
+              prop_powiat: str}
 
 h_prop_household_index = 'household_index'
 h_prop_inhabitants = 'idx'
@@ -80,6 +85,7 @@ class EconomicalGroup(Enum):
 HEALTHCARE_NOT_ASSIGNED = -1
 HOUSEHOLD_NOT_ASSIGNED = -1
 PROFESSION_NOT_ASSIGNED = -1
+POWIAT_NOT_ASSIGNED = -1
 SOCIAL_COMPETENCE_NOT_ASSIGNED = -1
 AGE_NOT_SET = -1
 PUBLIC_TRANSPORT_USAGE_NOT_SET = -1
@@ -196,6 +202,7 @@ class Node(BasicNode):
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
                  profession: int = PROFESSION_NOT_ASSIGNED,
                  is_healthcare: int = HEALTHCARE_NOT_ASSIGNED,
+                 powiat: str = POWIAT_NOT_ASSIGNED,
                  age_generation: Optional[str] = '') -> None:
         """
             Creates a node representing a person.
@@ -218,6 +225,7 @@ class Node(BasicNode):
         self[prop_public_transport_duration] = public_transport_duration
         self[prop_profession] = profession
         self[prop_ishealthcare] = is_healthcare
+        self[prop_powiat] = powiat
 
     @property
     def employment_status(self) -> int:
@@ -250,6 +258,14 @@ class Node(BasicNode):
     @profession.setter
     def profession(self, profession: int) -> None:
         self[prop_profession] = profession
+
+    @property
+    def powiat(self) -> str:
+        return self[prop_powiat]
+
+    @powiat.setter
+    def powiat(self, powiat: str) -> None:
+        self[prop_powiat] = powiat
 
     @classmethod
     def output_fields(cls) -> List[str]:

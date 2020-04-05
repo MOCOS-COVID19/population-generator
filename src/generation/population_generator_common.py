@@ -40,12 +40,14 @@ def _list_of_dicts_to_dict_of_lists(list_of_dicts: List[Dict[str, Any]]) -> Dict
     return {k: [dic[k] for dic in list_of_dicts] for k in list_of_dicts[0]}
 
 
-def prepare_simulations_folder(simulations_folder: Path = None):
+def prepare_simulations_folder(folder_relative_path: Path = None):
     """Creates a parent folder for generated population. """
-    if simulations_folder is None:
+    if folder_relative_path is None:
         simulations_folder = project_dir / 'data' / 'simulations' / datetime.now().strftime('%Y%m%d_%H%M')
+    else:
+        simulations_folder = project_dir / 'data' / 'simulations' / folder_relative_path
     if not simulations_folder.is_dir():
-        simulations_folder.mkdir()
+        simulations_folder.mkdir(parents=True)
     return simulations_folder
 
 

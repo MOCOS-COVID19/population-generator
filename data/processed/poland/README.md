@@ -6,8 +6,12 @@ These data are taken from Polish censuses. The subfolders of this folder contain
 
 ## Files:
 * age_gender.xlsx - a dataframe with columns: age, gender, male, female
-* healthcare_workers_2017.xlsx - Based on [Biuletyn Statystyczny Ministerstwa Zdrowia](https://www.csioz.gov.pl/fileadmin/user_upload/Biuletyny_informacyjny/biuletyn_2018_5c3deab703e35.pdf) 
-
+* generations.xlsx - mapping of age to a generation: young, middle[-aged], elderly
+* powiats.xlsx - list of powiats in Poland
+* powiats_subregion_capital_mapping.xlsx - mapping of each powiat to its subregion (a group of powiats based on NUTS-3 classification) and the capital powiat(s)(in 6 cases there are two) of this subregion
+* production_age.xlsx - mapping of age and gender into a production age (preproduction, production, postproduction)
+* subregions_capitals.xlsx - subregions with their capital powiats
+* healthcare_workers_2017.xlsx - Based on [Biuletyn Statystyczny Ministerstwa Zdrowia](https://www.csioz.gov.pl/fileadmin/user_upload/Biuletyny_informacyjny/biuletyn_2018_5c3deab703e35.pdf)
 
 ## Naming convention
 
