@@ -2,7 +2,7 @@
 with basic data of an individual and all data, respectively."""
 import numpy as np
 from enum import Enum
-
+from typing import Optional, List
 
 prop_idx = 'idx'
 prop_age = 'age'
@@ -13,6 +13,9 @@ prop_public_transport_usage = 'public_transport_usage'
 prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
+
+# auxiliary
+prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
            prop_public_transport_usage, prop_public_transport_duration, prop_profession]
@@ -26,11 +29,21 @@ data_types = {prop_idx: np.uint64,
               prop_household: np.uint64,
               prop_profession: np.uint64}
 
+h_prop_household_index = 'household_index'
+h_prop_inhabitants = 'idx'
+h_prop_house_master_index = 'house_master_index'
+h_prop_household_headcount = 'household_headcount'
+h_prop_young = 'young'
+h_prop_middle = 'middle'
+h_prop_elderly = 'elderly'
+h_prop_unassigned_occupants = 'unassigned_occupants'
+household_columns = [h_prop_household_index, h_prop_inhabitants]
+
 
 class AgeGroup(Enum):
-    YOUNG = 0
-    MIDDLE = 1
-    ELDERLY = 2
+    young = 0
+    middle = 1
+    elderly = 2
 
 
 class Gender(Enum):
@@ -71,11 +84,22 @@ PUBLIC_TRANSPORT_USAGE_NOT_SET = -1
 PUBLIC_TRANSPORT_DURATION_NOT_SET = -1
 
 
-class BasicNode(dict):
+class BasicNodeMeta(type):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cls._output_fields = [prop_idx, prop_age, prop_gender, prop_household]
+
+    @property
+    def output_fields(cls):
+        return cls._output_fields
+
+
+class BasicNode(dict, metaclass=BasicNodeMeta):
 
     def __init__(self, idx: int, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
-                 household: int = HOUSEHOLD_NOT_ASSIGNED) -> None:
+                 household: int = HOUSEHOLD_NOT_ASSIGNED,
+                 age_generation: Optional[str] = '') -> None:
         """
         Creates a node representing a person.
         :param age: (optional) age of the node, defaults to AGE_NOT_SET
@@ -88,6 +112,7 @@ class BasicNode(dict):
         self[prop_age] = age
         self[prop_gender] = gender.value
         self[prop_household] = household
+        self[prop_age_generation] = age_generation
 
     @property
     def idx(self) -> int:
@@ -117,8 +142,42 @@ class BasicNode(dict):
     def household(self, household: int) -> None:
         self[prop_household] = household
 
+    @property
+    def economical_group(self) -> EconomicalGroup:
+        if self.age < 18:
+            return EconomicalGroup.PRZEDPRODUKCYJNY
+        if self.age < 45:
+            return EconomicalGroup.PRODUKCYJNY_MOBILNY
+        if self.gender == Gender.FEMALE.value and self.age < 60:
+            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
+        if self.gender == Gender.MALE.value and self.age < 65:
+            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
+        return EconomicalGroup.POPRODUKCYJNY
+
+    @property
+    def age_generation(self) -> str:
+        return self[prop_age_generation]
+
+    @property
+    def young(self) -> bool:
+        return self.age_generation == 'young'
+
+    @property
+    def middle_aged(self) -> bool:
+        return self.age_generation == 'middle'
+
+    @property
+    def elderly(self) -> bool:
+        return self.age_generation == 'elderly'
+
+#    @classmethod
+#    def output_fields(cls) -> List[str]:
+#        return cls._output_fields
+
 
 class Node(BasicNode):
+    _output_fields = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
+                      prop_public_transport_usage, prop_public_transport_duration, prop_profession]
 
     def __init__(self, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
@@ -127,7 +186,8 @@ class Node(BasicNode):
                  public_transport_usage: float = PUBLIC_TRANSPORT_USAGE_NOT_SET,
                  public_transport_duration: float = PUBLIC_TRANSPORT_DURATION_NOT_SET,
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
-                 profession: int = PROFESSION_NOT_ASSIGNED) -> None:
+                 profession: int = PROFESSION_NOT_ASSIGNED,
+                 age_generation: Optional[str] = '') -> None:
         """
             Creates a node representing a person.
             :param age: (optional) age of the node, defaults to AGE_NOT_SET
@@ -140,9 +200,10 @@ class Node(BasicNode):
             mean vs other aggregate function), defaults to PUBLIC_TRANSPORT_DURATION_NOT_SET
             :param household: (optional) household index of the node, defaults to HOUSEHOLD_NOT_ASSIGNED
             :param profession: (optional) profession index of the node, defaults to PROFESSION_NOT_ASSIGNED
+            :param age_generation: (optional) age_generation of an individual
             :return: None
         """
-        super().__init__(0, age, gender, household)
+        super().__init__(0, age, gender, household, age_generation)
         self[prop_employment_status] = employment_status.value
         self[prop_social_competence] = social_competence
         self[prop_public_transport_usage] = public_transport_usage
@@ -189,22 +250,6 @@ class Node(BasicNode):
     def profession(self, profession: int) -> None:
         self[prop_profession] = profession
 
-    @property
-    def economical_group(self) -> EconomicalGroup:
-        if self.age < 18:
-            return EconomicalGroup.PRZEDPRODUKCYJNY
-        if self.age < 45:
-            return EconomicalGroup.PRODUKCYJNY_MOBILNY
-        if self.gender == Gender.FEMALE.value and self.age < 60:
-            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
-        if self.gender == Gender.MALE.value and self.age < 65:
-            return EconomicalGroup.PRODUKCYJNY_NIEMOBILNY
-        return EconomicalGroup.POPRODUKCYJNY
-
-    @property
-    def age_group(self) -> AgeGroup:
-        if self.age < 30:
-            return AgeGroup.YOUNG
-        if self.age < 60:
-            return AgeGroup.MIDDLE
-        return AgeGroup.ELDERLY
+    @classmethod
+    def output_fields(cls) -> List[str]:
+        return cls._output_fields
