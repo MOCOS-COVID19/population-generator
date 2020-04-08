@@ -104,11 +104,7 @@ class PolishPopulationGenerator(PopulationGenerator):
 
     def _draw_a_household(self) -> Tuple[int, int]:
         """Randomly select a household given the probability of occurrence"""
-        #print(self.households_headcount_ac_df)
-        #idx = np.random.choice(self.households_headcount_ac_df.index.tolist(),
-        #                       p=self.households_headcount_ac_df['probability'])
-        #print(self.households_headcount_ac_df.index)
-        row = next(self.presampled_households) #self.households_headcount_ac_df.iloc[idx]
+        row = next(self.presampled_households)
         return int(row['children']), int(row['adults'])
 
     def _draw_from_subpopulation(self, subpopulation, headcount: int, household_idx: int,
@@ -120,7 +116,7 @@ class PolishPopulationGenerator(PopulationGenerator):
         for _ in range(headcount):
             row = next(subpopulation)
             age = row[0]
-            gender = row[1] #GENDERS[np.random.choice([0, 1], p=[row.female_probability, 1 - row.female_probability])]
+            gender = row[1]
             nodes.append(BasicNode(current_index, age, gender, household_idx))
             current_index += 1
 
