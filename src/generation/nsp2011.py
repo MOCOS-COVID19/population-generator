@@ -27,13 +27,14 @@ class NSP:
 
 
 class NSPTransformer:
-    households_columns = [NSP.ID_OSOBA, NSP.ID_Gospodarstwa, en.prop_powiat, NSP.PLEC, NSP.WIEK, NSP.STATUS_AE_ILO,
-                          NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO, en.prop_subregion, en.prop_subregion_capital]
-    apartment_columns = [NSP.ID_OSOBA, NSP.ID_Mieszkania, en.prop_powiat, NSP.PLEC, NSP.WIEK, NSP.STATUS_AE_ILO,
-                         NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO, en.prop_subregion, en.prop_subregion_capital]
+    households_columns = [NSP.ID_OSOBA, NSP.ID_Gospodarstwa, NSP.POW, NSP.PLEC, NSP.WIEK, NSP.STATUS_AE_ILO,
+                          NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO]
+    apartment_columns = [NSP.ID_OSOBA, NSP.ID_Mieszkania, NSP.POW, NSP.PLEC, NSP.WIEK, NSP.STATUS_AE_ILO,
+                         NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO]
 
     column_mapping = {NSP.ID_OSOBA: en.prop_idx, NSP.ID_Gospodarstwa: en.prop_household,
                       NSP.ID_Mieszkania: en.prop_household,
+                      NSP.POW: en.prop_powiat,
                       NSP.PLEC: en.prop_gender, NSP.WIEK: en.prop_age,
                       NSP.STATUS_AE_ILO: en.prop_employment_status,
                       NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO: en.prop_profession}
@@ -53,8 +54,9 @@ class NSPTransformer:
         if self._powiat_subregion_mapping is None:
             project_dir = Path(__file__).resolve().parents[2]
             poland_processed_data_dir = project_dir / 'data' / 'processed' / 'poland'
-            self._powiat_subregion_mapping = pd.read_excel(
-                str(poland_processed_data_dir / ds.powiats_subregions_mapping_xlsx.file_name), dtype=str)
+            data = pd.read_excel(str(poland_processed_data_dir / ds.powiats_subregions_mapping_xlsx.file_name),
+                                 dtype=str)
+            self._powiat_subregion_mapping = {row['teryt_code']: row['powiat_code'] for _, row in data.iterrows()}
         return self._powiat_subregion_mapping
 
     @staticmethod
@@ -65,8 +67,8 @@ class NSPTransformer:
         df[NSP.PLEC] -= 1  # in NSP it is 1(m), 2(f); in our setup 0(m), 1(f)
         df[NSP.STATUS_AE_ILO] = df[NSP.STATUS_AE_ILO].replace(self.employment_mapping)
         df[NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO] = df[NSP.ZAWOD_WYKON_GLOWNAP_KOD_ILO].fillna(en.PROFESSION_NOT_ASSIGNED)
-        # merging with powiat_subregion_capital dataframe
-        return pd.merge(df, self.powiat_subregion_mapping, left_on=NSP.POW, right_on='teryt_code')
+        df[NSP.POW] = df[NSP.POW].replace(self.powiat_subregion_mapping)
+        return df
 
     def transform_single(self, file_path: Path):
         df = self.decorate_raw_data(self.read_raw_data(file_path))
@@ -81,7 +83,7 @@ class NSPTransformer:
         df_population = df[columns].rename(columns=self.column_mapping)
         df_population.to_csv(str(output_folder / ds.output_population_csv.file_name), index=False)
         df_households = df_population.groupby(en.prop_household)[[en.prop_idx]].aggregate(lambda x: list(x))
-        df_households.to_csv(str(output_folder / ds.output_households_csv.file_name), index=False)
+        df_households.to_csv(str(output_folder / ds.output_households_csv.file_name))
 
     def transform(self):
         for file in self.input_folder.iterdir():
@@ -98,3 +100,4 @@ def main(input_path_str: str, results_dir: str) -> None:
 
 if __name__ == '__main__':
     fire.Fire(main)
+    # python src.generation.nsp2011 d:\coronavirus\nsp2011\NSP2011\ nsp2011_powiats
