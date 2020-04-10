@@ -8,7 +8,7 @@ from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.features.entities import BasicNode
+from src.features.entities import BasicNode, GENDERS
 from src.features.population_generator import PopulationGenerator
 from src.features.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
