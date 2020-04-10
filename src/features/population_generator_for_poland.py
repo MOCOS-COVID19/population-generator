@@ -1,6 +1,6 @@
 from contextlib import closing
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Iterator
 
 import numpy as np
 import pandas as pd
@@ -8,11 +8,11 @@ from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.features.entities import BasicNode, GENDERS
+from src.features.entities import BasicNode, GENDERS, Gender
 from src.features.population_generator import PopulationGenerator
 from src.features.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
-def transform(subpopulation_df):
+def transform(subpopulation_df : pd.DataFrame) -> Tuple[List[Tuple[int, Gender]], List[float]]:
     ret = []
     probs = []
 
@@ -27,7 +27,7 @@ def transform(subpopulation_df):
         probs.append(male_prob)
     return ret, probs
 
-def presample_subpop(subpopulation_df, count):
+def presample_subpop(subpopulation_df : pd.DataFrame, count : int) -> List[Tuple[int, Gender]]:
     V, probs = transform(subpopulation_df)
     idxes = mocos_helper.sample_with_replacement_shuffled(probs, count)
     return [V[idx] for idx in idxes]
