@@ -107,7 +107,7 @@ class PolishPopulationGenerator(PopulationGenerator):
         row = next(self.presampled_households)
         return int(row['children']), int(row['adults'])
 
-    def _draw_from_subpopulation(self, subpopulation, headcount: int, household_idx: int,
+    def _draw_from_subpopulation(self, subpopulation : Iterator[Tuple[int, Gender]], headcount: int, household_idx: int,
                                  current_index: int) -> Tuple[List[BasicNode], int]:
         """Randomly draw `headcount` people from `subpopulation` given the probability of age/gender combination within this
         subpopulation and lodge them together in a household given by `household_idx`. """
