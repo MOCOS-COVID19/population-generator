@@ -67,10 +67,14 @@ def drop_obsolete_columns(df: pd.DataFrame, proper_columns) -> pd.DataFrame:
 
 
 def age_range_to_age(df: pd.DataFrame) -> pd.DataFrame:
-    idx = df[df.age.str.len() > 2].index.tolist()
-    df.loc[idx, 'age'] = df.loc[idx].age.str.slice(0, 2).astype(int)
-    df.loc[idx, 'age'] += np.random.choice(list(range(0, 5)), size=len(idx))
-    df.age = df.age.astype(int)  # make the whole column as int
+    try:
+        idx = df[df.age.str.len() > 2].index.tolist()
+        df.loc[idx, 'age'] = df.loc[idx].age.str.slice(0, 2).astype(int)
+        df.loc[idx, 'age'] += np.random.choice(list(range(0, 5)), size=len(idx))
+        df.age = df.age.astype(int)  # make the whole column as int
+    except AttributeError:
+        pass
+        # logging.warning(f'{df.age.dtypes} is not string, skipping age-range to age mapping')
     return df
 
 
