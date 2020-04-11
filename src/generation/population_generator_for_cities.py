@@ -10,9 +10,9 @@ from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 import random
 
-from src.data import datasets, preprocessing_poland
-from src.features import entities
-from src.features.population_generator_common import (age_gender_population,
+from src.data import datasets, entities
+from src.preprocessing import preprocessing_poland
+from src.generation.population_generator_common import (age_gender_population,
                                                       sample_from_distribution,
                                                       rename_index, drop_obsolete_columns,
                                                       age_range_to_age)
@@ -532,11 +532,12 @@ if __name__ == '__main__':
 
     # not used in this stub but often useful for finding various files
     project_dir = Path(__file__).resolve().parents[2]
-    data_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
+    data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
 
     # To read population data from a file:
     # sim_dir = project_dir / 'data' / 'simulations' / '20200327_1052'
     # generate(data_folder, simulations_folder=sim_dir, other_features=False)
 
     # or to generate a new dataset
-    generate(data_folder, other_features=False)
+    for i in range(10):
+        generate(data_folder, other_features=False)

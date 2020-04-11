@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats
 
-from src.features import entities
-from src.features import population_generator_common as population
+from src.data import entities
+from src.generation import population_generator_common as population
 
 
 class TestNodesToDataFrame(TestCase):

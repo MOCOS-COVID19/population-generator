@@ -5,9 +5,8 @@ import numpy as np
 import pandas as pd
 import re
 
-from src.data import datasets
-from src.features import entities
-from src.features import population_generator_for_cities as gen
+from src.data import datasets, entities
+from src.generation import population_generator_for_cities as gen
 
 
 class TestPopulation(TestCase):
