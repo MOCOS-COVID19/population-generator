@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.data.entities import BasicNode, GENDERS
-from src.features.population_generator_common import nodes_to_dataframe, cleanup_population
+from src.generation.population_generator_common import nodes_to_dataframe, cleanup_population
 
 
 class PopulationGenerator(ABC):
