@@ -100,4 +100,4 @@ def main(input_path_str: str, results_dir: str) -> None:
 
 if __name__ == '__main__':
     fire.Fire(main)
-    # python src.generation.nsp2011 d:\coronavirus\nsp2011\NSP2011\ nsp2011_powiats
+    # python src\generation\nsp2011.py d:\coronavirus\nsp2011\NSP2011\ nsp2011_powiats
