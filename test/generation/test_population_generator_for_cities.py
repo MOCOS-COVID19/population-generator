@@ -6,6 +6,7 @@ import pandas as pd
 import re
 
 from src.data import datasets, entities
+from src.features import SocialCompetenceParams, SocialCompetence
 from src.generation import population_generator_for_cities as gen
 
 
@@ -63,7 +64,8 @@ class TestGeneratePopulation(TestCase):
     def setUpClass(cls) -> None:
         cls.resources_dir = Path(__file__).resolve().parents[0] / 'resources'
         cls.output_dir = Path(__file__).resolve().parents[0] / 'output'
-        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, False)
+        other_features = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
+        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, other_features)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -104,6 +106,13 @@ class TestGeneratePopulation(TestCase):
         for _, val in self.households[entities.h_prop_inhabitants].iteritems():
             indices.update(int(x) for x in val.strip('[]').split(', '))
         self.assertEqual(len(self.population.index), len(indices))
+
+    def test_social_competence(self):
+        self.assertIn(entities.prop_social_competence, self.population.columns)
+        values = self.population[entities.prop_social_competence]
+        self.assertGreaterEqual(values.min(), 0)
+        self.assertLessEqual(values.max(), 1)
+        self.assertEqual(0, values.isna().sum())
 
 
 class TestGenerateHouseholds(TestCase):

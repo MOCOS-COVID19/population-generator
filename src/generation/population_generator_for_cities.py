@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, Dict
 
 import numpy as np
 import pandas as pd
@@ -12,26 +12,11 @@ import random
 
 from src.data import datasets, entities
 from src.preprocessing import preprocessing_poland
+from src.features import Feature, FeatureParams, SocialCompetence, SocialCompetenceParams
 from src.generation.population_generator_common import (age_gender_population,
                                                       sample_from_distribution,
                                                       rename_index, drop_obsolete_columns,
                                                       age_range_to_age)
-
-
-def generate_social_competence(sample_size, distribution_name='norm', loc=0, scale=1):
-    """
-    After [1] social competence (introversion and extraversion) are modelled according to a normal distribution with
-    mean shown by the majority of the population.
-    [1]  B.Zawadzki, J.Strelau, P.Szczepaniak, M.Śliwińska: Inwentarz osobowości NEO-FFI Costy i McCrae.
-    Warszawa: Pracownia Testów Psychologicznych Polskiego Towarzystwa Psychologicznego, 1997. ISBN 83-85512-89-6.
-    :param sample_size: size of a sample
-    :param distribution_name: name of a distribution
-    :param loc: parameters of the distribution
-    :param scale: parameter of the distribution
-    :return: social competence vector of a population
-    """
-    x = sample_from_distribution(sample_size, distribution_name, loc=loc, scale=scale)
-    return MinMaxScaler().fit_transform(x.reshape(-1, 1))
 
 
 def narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row):
@@ -156,9 +141,8 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
     :return: a pandas dataframe with households to lodge the population.
     """
     households = None
-
+    households_ready_feather = output_folder / datasets.output_households_interim_feather.file_name
     try:
-        households_ready_feather = output_folder / datasets.output_households_interim_feather.file_name
         households = pd.read_feather(str(households_ready_feather))
     except Exception as e:
         logging.warning("Reading interim Feather failed, reason: " + str(e))
@@ -307,7 +291,9 @@ def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFra
     return pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
 
 
-def generate_population(data_folder: Path, output_folder: Path, other_features: bool = True) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def generate_population(data_folder: Path, output_folder: Path,
+                        other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> \
+        Tuple[pd.DataFrame, pd.DataFrame]:
     # if population already generated, read from file
     population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
     households_ready_xlsx = output_folder / datasets.output_households_xlsx.file_name
@@ -477,22 +463,11 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
                                     1, 1)
 
         logging.info('Other features')
-        if other_features:
-            # social competence based on previous findings, probably to be changed
-            population[entities.prop_social_competence] = generate_social_competence(len(population.index))
-            # transportation
-            population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
-            # transportation duration
-            population[entities.prop_public_transport_duration] = generate_public_transport_duration(
-                population[entities.prop_public_transport_usage])
-
-            population[entities.prop_employment_status] = generate_employment(data_folder,
-                                                                              population[[entities.prop_age,
-                                                                                          entities.prop_gender]])
+        for feature_col, (feature, feature_params) in other_features.items():
+            population[feature_col] = feature.generate(population_size, feature_params)
 
         logging.info('Cleaning up the population dataframe')
         population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)), entities.prop_idx)
-        # households = fix_empty_households(households)
     finally:
         logging.info('Saving a population to a file... ')
         population.to_csv(str(output_folder / datasets.output_population_csv.file_name))
@@ -506,7 +481,8 @@ def generate_population(data_folder: Path, output_folder: Path, other_features: 
     return population, households
 
 
-def generate(data_folder: Path, simulations_folder: Path = None, other_features: bool = True) -> pd.DataFrame:
+def generate(data_folder: Path, simulations_folder: Path = None,
+             other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Generates a population given the folder with data and the size of this population.
     :param data_folder: folder with data
@@ -514,7 +490,7 @@ def generate(data_folder: Path, simulations_folder: Path = None, other_features:
     :param simulations_folder: the path to a folder where population and households for this simulation are to be saved.
     If the folder already exists and contains households.xlsx then households are read from the file. If the folder
     already exists and contains population.xslx file then a population is read from the file.
-    :param other_features: whether to generate other features
+    :param other_features: map of other features generatorators
     :return: a pandas dataframe with a population generated from the data in data_folder
     """
     # simulations folder
@@ -538,6 +514,19 @@ if __name__ == '__main__':
     # sim_dir = project_dir / 'data' / 'simulations' / '20200327_1052'
     # generate(data_folder, simulations_folder=sim_dir, other_features=False)
 
+    # social competence based on previous findings, probably to be changed
+    # population[entities.prop_social_competence] = generate_social_competence(len(population.index))
+    # transportation
+    # population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
+    # transportation duration
+    # population[entities.prop_public_transport_duration] = generate_public_transport_duration(
+    #    population[entities.prop_public_transport_usage])
+
+    # population[entities.prop_employment_status] = generate_employment(data_folder,
+    #                                                                  population[[entities.prop_age,
+    #                                                                              entities.prop_gender]])
+    other = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
+
     # or to generate a new dataset
     for i in range(10):
-        generate(data_folder, other_features=False)
+        generate(data_folder, other_features=other)

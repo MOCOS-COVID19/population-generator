@@ -87,7 +87,7 @@ PUBLIC_TRANSPORT_DURATION_NOT_SET = -1
 class BasicNodeMeta(type):
     def __init__(cls, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        cls._output_fields = [prop_idx, prop_age, prop_gender, prop_household]
+        cls._output_fields = [prop_idx, prop_age, prop_gender, prop_household, prop_social_competence]
 
     @property
     def output_fields(cls):
@@ -99,7 +99,8 @@ class BasicNode(dict, metaclass=BasicNodeMeta):
     def __init__(self, idx: int, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
-                 age_generation: Optional[str] = '') -> None:
+                 age_generation: Optional[str] = '',
+                 social_competence: float = SOCIAL_COMPETENCE_NOT_ASSIGNED) -> None:
         """
         Creates a node representing a person.
         :param age: (optional) age of the node, defaults to AGE_NOT_SET
@@ -113,6 +114,7 @@ class BasicNode(dict, metaclass=BasicNodeMeta):
         self[prop_gender] = gender.value
         self[prop_household] = household
         self[prop_age_generation] = age_generation
+        self[prop_social_competence] = social_competence
 
     @property
     def idx(self) -> int:
@@ -170,9 +172,13 @@ class BasicNode(dict, metaclass=BasicNodeMeta):
     def elderly(self) -> bool:
         return self.age_generation == 'elderly'
 
-#    @classmethod
-#    def output_fields(cls) -> List[str]:
-#        return cls._output_fields
+    @property
+    def social_competence(self) -> float:
+        return self[prop_social_competence]
+
+    @social_competence.setter
+    def social_competence(self, social_competence: float) -> None:
+        self[prop_social_competence] = social_competence
 
 
 class Node(BasicNode):
@@ -203,9 +209,8 @@ class Node(BasicNode):
             :param age_generation: (optional) age_generation of an individual
             :return: None
         """
-        super().__init__(0, age, gender, household, age_generation)
+        super().__init__(0, age, gender, household, age_generation, social_competence)
         self[prop_employment_status] = employment_status.value
-        self[prop_social_competence] = social_competence
         self[prop_public_transport_usage] = public_transport_usage
         self[prop_public_transport_duration] = public_transport_duration
         self[prop_profession] = profession
@@ -217,14 +222,6 @@ class Node(BasicNode):
     @employment_status.setter
     def employment_status(self, employment_status: EmploymentStatus) -> None:
         self[prop_employment_status] = employment_status.value
-
-    @property
-    def social_competence(self) -> float:
-        return self[prop_social_competence]
-
-    @social_competence.setter
-    def social_competence(self, social_competence: float) -> None:
-        self[prop_social_competence] = social_competence
 
     @property
     def public_transport_usage(self) -> float:
