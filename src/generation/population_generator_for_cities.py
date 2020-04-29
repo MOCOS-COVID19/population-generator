@@ -464,7 +464,7 @@ def generate_population(data_folder: Path, output_folder: Path,
 
         logging.info('Other features')
         for feature_col, (feature, feature_params) in other_features.items():
-            population[feature_col] = feature.generate(population_size, feature_params)
+            population = feature.generate(population_size, feature_params, population)
 
         logging.info('Cleaning up the population dataframe')
         population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)), entities.prop_idx)

@@ -6,7 +6,8 @@ These data are taken from Polish censuses. The subfolders of this folder contain
 
 ## Files:
 * age_gender.xlsx - a dataframe with columns: age, gender, male, female
-* to be continued, once other files are decided upon.
+* healthcare_workers_2017.xlsx - Based on [Biuletyn Statystyczny Ministerstwa Zdrowia](https://www.csioz.gov.pl/fileadmin/user_upload/Biuletyny_informacyjny/biuletyn_2018_5c3deab703e35.pdf) 
+
 
 ## Naming convention
 

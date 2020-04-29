@@ -76,7 +76,7 @@ class PopulationGenerator(ABC):
     def _add_other_features(self, population: pd.DataFrame,
                             other_features: Dict[str, Tuple[Feature, FeatureParams]]) -> pd.DataFrame:
         for feature_col, (feature, feature_params) in other_features.items():
-            population.loc[:, feature_col] = feature.generate(len(population.index), feature_params)
+            population = feature.generate(len(population.index), feature_params, population)
         return population
 
     def run(self, household_start_index: Optional[int] = 0, population_start_index: Optional[int] = 0,

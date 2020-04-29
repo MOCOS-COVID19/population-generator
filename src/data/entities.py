@@ -13,12 +13,13 @@ prop_public_transport_usage = 'public_transport_usage'
 prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
+prop_ishealthcare = 'ishealthcare'
 
 # auxiliary
 prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-           prop_public_transport_usage, prop_public_transport_duration, prop_profession]
+           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
 data_types = {prop_idx: np.uint64,
               prop_age: np.int8,
               prop_gender: np.int8,
@@ -76,6 +77,7 @@ class EconomicalGroup(Enum):
     POPRODUKCYJNY = 3
 
 
+HEALTHCARE_NOT_ASSIGNED = -1
 HOUSEHOLD_NOT_ASSIGNED = -1
 PROFESSION_NOT_ASSIGNED = -1
 SOCIAL_COMPETENCE_NOT_ASSIGNED = -1
@@ -183,7 +185,7 @@ class BasicNode(dict, metaclass=BasicNodeMeta):
 
 class Node(BasicNode):
     _output_fields = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-                      prop_public_transport_usage, prop_public_transport_duration, prop_profession]
+                      prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
 
     def __init__(self, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
@@ -193,6 +195,7 @@ class Node(BasicNode):
                  public_transport_duration: float = PUBLIC_TRANSPORT_DURATION_NOT_SET,
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
                  profession: int = PROFESSION_NOT_ASSIGNED,
+                 is_healthcare: int = HEALTHCARE_NOT_ASSIGNED,
                  age_generation: Optional[str] = '') -> None:
         """
             Creates a node representing a person.
@@ -214,6 +217,7 @@ class Node(BasicNode):
         self[prop_public_transport_usage] = public_transport_usage
         self[prop_public_transport_duration] = public_transport_duration
         self[prop_profession] = profession
+        self[prop_ishealthcare] = is_healthcare
 
     @property
     def employment_status(self) -> int:
@@ -250,3 +254,11 @@ class Node(BasicNode):
     @classmethod
     def output_fields(cls) -> List[str]:
         return cls._output_fields
+
+    @property
+    def is_healthcare(self) -> int:
+        return self[prop_ishealthcare]
+
+    @is_healthcare.setter
+    def is_healthcare(self, is_healthcare: int) -> None:
+        self[prop_ishealthcare] = is_healthcare

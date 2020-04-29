@@ -8,6 +8,5 @@ class FeatureParams:
 
 
 class Feature:
-    @staticmethod
-    def generate(population_size: int, params: FeatureParams = FeatureParams()) -> Union[pd.Series, np.ndarray]:
+    def generate(self, population_size: int, params: FeatureParams, population: pd.DataFrame) -> pd.DataFrame:
         raise NotImplementedError('Each feature should implement this')

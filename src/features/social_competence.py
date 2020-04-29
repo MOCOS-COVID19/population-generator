@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+from src.data.entities import prop_social_competence
 from src.features.base import Feature, FeatureParams
 from src.generation.population_generator_common import (sample_from_distribution)
 
@@ -17,9 +19,10 @@ class SocialCompetenceParams(FeatureParams):
 
 
 class SocialCompetence(Feature):
-    @staticmethod
-    def generate(population_size: int,
-                 params: SocialCompetenceParams = SocialCompetenceParams()) -> np.ndarray:
+
+    def generate(self, population_size: int,
+                 params: SocialCompetenceParams = SocialCompetenceParams(),
+                 population: pd.DataFrame = None) -> pd.DataFrame:
         """
         After [1] social competence (introversion and extraversion) are modelled according to a normal distribution with
         mean shown by the majority of the population.
@@ -27,8 +30,10 @@ class SocialCompetence(Feature):
         Warszawa: Pracownia Testów Psychologicznych Polskiego Towarzystwa Psychologicznego, 1997. ISBN 83-85512-89-6.
         :param population_size: size of a sample
         :param params: parameters of this feature
+        :param population: population sample
         :return: social competence vector of a population
         """
         x = sample_from_distribution(population_size, params.distribution_name, loc=params.loc,
                                      scale=params.scale)
-        return np.clip(x, 0, 1).reshape(-1, 1)
+        population[prop_social_competence] = np.clip(x, 0, 1).reshape(-1, 1)
+        return population

@@ -7,13 +7,13 @@ from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.data.entities import BasicNode, GENDERS, Gender, prop_social_competence
-from src.features import SocialCompetence, SocialCompetenceParams
+from src.data.entities import BasicNode, GENDERS, Gender, prop_social_competence, prop_ishealthcare
+from src.features import SocialCompetence, SocialCompetenceParams, IsHealthCareParams, IsHealthCare
 from src.generation.population_generator import PopulationGenerator
 from src.generation.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
 
-def transform(subpopulation_df : pd.DataFrame) -> Tuple[List[Tuple[int, Gender]], List[float]]:
+def transform(subpopulation_df: pd.DataFrame) -> Tuple[List[Tuple[int, Gender]], List[float]]:
     ret = []
     probs = []
 
@@ -28,10 +28,12 @@ def transform(subpopulation_df : pd.DataFrame) -> Tuple[List[Tuple[int, Gender]]
         probs.append(male_prob)
     return ret, probs
 
-def presample_subpop(subpopulation_df : pd.DataFrame, count : int) -> List[Tuple[int, Gender]]:
+
+def presample_subpop(subpopulation_df: pd.DataFrame, count: int) -> List[Tuple[int, Gender]]:
     V, probs = transform(subpopulation_df)
     idxes = mocos_helper.sample_with_replacement_shuffled(probs, count)
     return [V[idx] for idx in idxes]
+
 
 class PolishPopulationGenerator(PopulationGenerator):
     """Generator class for Polish population. The generation process is split into voivodships, since there is
@@ -51,7 +53,9 @@ class PolishPopulationGenerator(PopulationGenerator):
         self.adults_df = self.age_gender_df[self.age_gender_df['Age'] >= 18].reset_index(drop=True)
         self.adults_df['total_probability'] = self.adults_df['Total'] / self.adults_df['Total'].sum()
         self.households_headcount_ac_df = self._preprocess_household_headcount_ac()
-        presampled_households_idxes = mocos_helper.sample_with_replacement_shuffled(list(self.households_headcount_ac_df.probability), int(self.number_of_households)) # TODO: why do we resmaple households?
+        presampled_households_idxes = mocos_helper.sample_with_replacement_shuffled(
+            list(self.households_headcount_ac_df.probability),
+            int(self.number_of_households))
         self.presampled_households = self.households_headcount_ac_df.iloc[list(presampled_households_idxes)]
         children_needed = self.presampled_households.children.sum()
         adults_needed = self.presampled_households.adults.sum()
@@ -108,7 +112,7 @@ class PolishPopulationGenerator(PopulationGenerator):
         row = next(self.presampled_households)
         return int(row['children']), int(row['adults'])
 
-    def _draw_from_subpopulation(self, subpopulation : Iterator[Tuple[int, Gender]], headcount: int, household_idx: int,
+    def _draw_from_subpopulation(self, subpopulation: Iterator[Tuple[int, Gender]], headcount: int, household_idx: int,
                                  current_index: int) -> Tuple[List[BasicNode], int]:
         """Randomly draw `headcount` people from `subpopulation` given the probability of age/gender combination within this
         subpopulation and lodge them together in a household given by `household_idx`. """
@@ -157,6 +161,7 @@ if __name__ == '__main__':
     poland_simulations_folder = prepare_simulations_folder()
     other_features = {prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
     for i, item in enumerate(voivodships):
+        other_features[prop_ishealthcare] = (IsHealthCare(), IsHealthCareParams(item.name))
         next_household_index, next_person_index = PolishPopulationGenerator(poland_folder, item).run(
             next_household_index,
             next_person_index,
