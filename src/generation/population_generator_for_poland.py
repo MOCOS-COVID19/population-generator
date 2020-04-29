@@ -2,15 +2,16 @@ from contextlib import closing
 from pathlib import Path
 from typing import Tuple, List, Optional, Iterator
 
-import numpy as np
 import pandas as pd
 from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.data.entities import BasicNode, GENDERS, Gender
+from src.data.entities import BasicNode, GENDERS, Gender, prop_social_competence
+from src.features import SocialCompetence, SocialCompetenceParams
 from src.generation.population_generator import PopulationGenerator
 from src.generation.population_generator_common import prepare_simulations_folder, get_age_gender_df
+
 
 def transform(subpopulation_df : pd.DataFrame) -> Tuple[List[Tuple[int, Gender]], List[float]]:
     ret = []
@@ -154,8 +155,10 @@ if __name__ == '__main__':
     next_household_index = 0
     next_person_index = 0
     poland_simulations_folder = prepare_simulations_folder()
+    other_features = {prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
     for i, item in enumerate(voivodships):
         next_household_index, next_person_index = PolishPopulationGenerator(poland_folder, item).run(
             next_household_index,
             next_person_index,
-            poland_simulations_folder)
+            poland_simulations_folder,
+            other_features)

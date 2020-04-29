@@ -7,6 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from src.data.entities import BasicNode, GENDERS
+from src.features import Feature, FeatureParams, SocialCompetence, SocialCompetenceParams
 from src.generation.population_generator_common import nodes_to_dataframe, cleanup_population
 
 
@@ -54,11 +55,11 @@ class PopulationGenerator(ABC):
     def number_of_households(self) -> int:
         raise NotImplementedError()
 
-    def _save_interim_results(self, simulation_folder, households, nodes, include_header):
+    def _save_interim_results(self, simulation_folder, households, people_df, include_header):
         """Saves (appends) households and population to csv files"""
         hdf = pd.DataFrame(data={self.household_csv_houshold_index_col: list(households.keys()),
                                  self.household_csv_idx_col: list(households.values())})
-        pdf = cleanup_population(nodes_to_dataframe(nodes))
+        pdf = cleanup_population(people_df)
         if include_header:
             pdf.to_csv(str(simulation_folder / self.simulation_population_csv), index=False)
             hdf.to_csv(str(simulation_folder / self.simulation_household_csv), index=False)
@@ -72,8 +73,15 @@ class PopulationGenerator(ABC):
     def _draw_household_and_members(self, current_household_idx, current_index) -> Tuple[List[BasicNode], int]:
         raise NotImplementedError()
 
+    def _add_other_features(self, population: pd.DataFrame,
+                            other_features: Dict[str, Tuple[Feature, FeatureParams]]) -> pd.DataFrame:
+        for feature_col, (feature, feature_params) in other_features.items():
+            population.loc[:, feature_col] = feature.generate(len(population.index), feature_params)
+        return population
+
     def run(self, household_start_index: Optional[int] = 0, population_start_index: Optional[int] = 0,
-            simulation_folder: Optional[Path] = None) -> Tuple[int, int]:
+            simulation_folder: Optional[Path] = None,
+            other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> Tuple[int, int]:
         """Main generation function. Given a starting household_index and a starting population_index, as well as
         the path to a folder where simulation results are to be saved, this function generates population and
         households in a voivodship the generator was initialized with. """
@@ -91,10 +99,14 @@ class PopulationGenerator(ABC):
 
             # Every household_batch_size households save the generated households and population and clear memory.
             if idx % household_batch_size == 0 and idx != 0:
-                self._save_interim_results(simulation_folder, households, nodes, idx == household_batch_size)
+                people_df = nodes_to_dataframe(nodes)
+                self._add_other_features(people_df, other_features)
+                self._save_interim_results(simulation_folder, households, people_df, idx == household_batch_size)
                 nodes = []
                 households = {}
 
         include_header = self.number_of_households < household_batch_size
-        self._save_interim_results(simulation_folder, households, nodes, include_header)
+        people_df = nodes_to_dataframe(nodes)
+        self._add_other_features(people_df, other_features)
+        self._save_interim_results(simulation_folder, households, people_df, include_header)
         return self.number_of_households + household_start_index, current_index
