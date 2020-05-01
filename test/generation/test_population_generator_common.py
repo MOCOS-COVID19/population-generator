@@ -28,14 +28,14 @@ class TestNodesToDataFrame(TestCase):
                               public_transport_duration=0,
                               public_transport_usage=False,
                               household=1, profession=entities.PROFESSION_NOT_ASSIGNED,
-                              age_generation=entities.AgeGroup.young.value)
+                              age_generation=entities.AgeGroup.young.value, is_healthcare=0)
         node2 = entities.Node(age=37, gender=entities.Gender.FEMALE,
                               employment_status=entities.EmploymentStatus.EMPLOYED,
                               social_competence=0.7,
                               public_transport_duration=30,
                               public_transport_usage=True,
                               household=1, profession=7,
-                              age_generation=entities.AgeGroup.middle.value)
+                              age_generation=entities.AgeGroup.middle.value, is_healthcare=1)
         nodes = [node1, node2]
 
         df = population.nodes_to_dataframe(nodes)
