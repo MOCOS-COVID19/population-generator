@@ -2,9 +2,9 @@ from contextlib import closing
 from pathlib import Path
 from typing import Tuple, List, Optional, Iterator
 
+import mocos_helper
 import pandas as pd
 from xlrd import XLRDError
-import mocos_helper
 
 from src.data.datasets import *
 from src.data.entities import BasicNode, GENDERS, Gender, prop_social_competence, prop_ishealthcare
@@ -56,6 +56,7 @@ class PolishPopulationGenerator(PopulationGenerator):
         presampled_households_idxes = mocos_helper.sample_with_replacement_shuffled(
             list(self.households_headcount_ac_df.probability),
             int(self.number_of_households))
+
         self.presampled_households = self.households_headcount_ac_df.iloc[list(presampled_households_idxes)]
         children_needed = self.presampled_households.children.sum()
         adults_needed = self.presampled_households.adults.sum()

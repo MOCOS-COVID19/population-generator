@@ -528,5 +528,4 @@ if __name__ == '__main__':
     other = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
 
     # or to generate a new dataset
-    for i in range(10):
-        generate(data_folder, other_features=other)
+    generate(data_folder, other_features=other)

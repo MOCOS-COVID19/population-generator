@@ -1,9 +1,10 @@
-data/**/*.zip filter=lfs diff=lfs merge=lfs -text
-data/**/*.csv filter=lfs diff=lfs merge=lfs -text
-data/**/*.xlsx filter=lfs diff=lfs merge=lfs -text
-tests/**/*.xlsx filter=lfs diff=lfs merge=lfs -text
-data/**/*.ods filter=lfs diff=lfs merge=lfs -text
-references/*.pdf filter=lfs diff=lfs merge=lfs -text
-notebooks/*.ipynb filter=lfs diff=lfs merge=lfs -text
-test/models/assets/dummy_distribution.npy filter=lfs diff=lfs merge=lfs -text
-test/models/assets/dummy_individuals.csv filter=lfs diff=lfs merge=lfs -text
+data/**/*.zip filter=lfs diff=lfs merge=lfs -text binary
+data/**/*.csv filter=lfs diff=lfs merge=lfs -text binary
+data/**/*.xlsx filter=lfs diff=lfs merge=lfs -text binary
+data/**/*.xls filter=lfs diff=lfs merge=lfs -text binary
+data/**/*.ods filter=lfs diff=lfs merge=lfs -text binary
+tests/**/*.xlsx filter=lfs diff=lfs merge=lfs -text binary
+references/*.pdf filter=lfs diff=lfs merge=lfs -text binary
+notebooks/*.ipynb filter=lfs diff=lfs merge=lfs -text binary
+test/models/assets/dummy_distribution.npy filter=lfs diff=lfs merge=lfs -text binary
+test/models/assets/dummy_individuals.csv filter=lfs diff=lfs merge=lfs -text binary
