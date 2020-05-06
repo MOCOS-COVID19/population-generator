@@ -9,8 +9,8 @@ from src.data.entities import prop_gender, prop_ishealthcare, Gender, prop_age, 
 
 
 class IsHealthCareParams(FeatureParams):
-    def __init__(self, voyvodship):
-        self.voyvodship = voyvodship
+    def __init__(self, territorial_unit):
+        self.territorial_unit = territorial_unit
 
 
 class IsHealthCare(Feature):
@@ -29,7 +29,7 @@ class IsHealthCare(Feature):
         males = population[(population[prop_gender] == Gender.MALE.value)
                              & (population[prop_age] >= 22) & (population[prop_age] < 65)].index.tolist()
         # 1 male : 4 females in healthcare
-        hw_count = self.healthcare_workers.loc[params.voyvodship, self.healthcare_column] * population_size / 10000
+        hw_count = self.healthcare_workers.loc[params.territorial_unit, self.healthcare_column] * population_size / 10000
         hwf = int(round(0.8 * hw_count))
         hwm = int(round(0.2 * hw_count))
         hwfc = np.random.choice(females, size=hwf, replace=False)

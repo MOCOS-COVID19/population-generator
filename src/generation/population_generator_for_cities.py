@@ -12,11 +12,12 @@ import random
 
 from src.data import datasets, entities
 from src.preprocessing import preprocessing_poland
-from src.features import Feature, FeatureParams, SocialCompetence, SocialCompetenceParams
+from src.features import (Feature, FeatureParams, SocialCompetence, SocialCompetenceParams, IsHealthCareParams,
+                          IsHealthCare)
 from src.generation.population_generator_common import (age_gender_population,
-                                                      sample_from_distribution,
-                                                      rename_index, drop_obsolete_columns,
-                                                      age_range_to_age)
+                                                        sample_from_distribution,
+                                                        rename_index, drop_obsolete_columns,
+                                                        age_range_to_age)
 
 
 def narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row):
@@ -340,7 +341,8 @@ def generate_population(data_folder: Path, output_folder: Path,
     population_prop_household_idx = population.columns.get_loc(entities.prop_household)
 
     try:
-        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments', total=len(households2)):
+        for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments',
+                                       total=len(households2)):
             inhabitants = [household_row.house_master_index]
             # lodged_headcount = 1
             try:
@@ -411,7 +413,8 @@ def generate_population(data_folder: Path, output_folder: Path,
             df = narrow_age_group(current_households, young, middle, elderly)
             for i, row in tqdm(df.iterrows(), desc=f'Lodging {age_group} population'):
                 size = int(row[entities.h_prop_unassigned_occupants])
-                new_inhabitants = [_homeless_indices[age_group].pop() for _ in range(min(size, len(_homeless_indices[age_group])))]
+                new_inhabitants = [_homeless_indices[age_group].pop() for _ in
+                                   range(min(size, len(_homeless_indices[age_group])))]
                 if len(new_inhabitants) == 0:
                     logging.warning(f'No more people within {age_group} group')
                     return
@@ -462,12 +465,12 @@ def generate_population(data_folder: Path, output_folder: Path,
         process_multiple_age_groups(households, population, households_interim, [x.name for x in entities.AgeGroup], 1,
                                     1, 1)
 
+        logging.info('Cleaning up the population dataframe')
+        population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)),
+                                  entities.prop_idx)
         logging.info('Other features')
         for feature_col, (feature, feature_params) in other_features.items():
             population = feature.generate(population_size, feature_params, population)
-
-        logging.info('Cleaning up the population dataframe')
-        population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)), entities.prop_idx)
     finally:
         logging.info('Saving a population to a file... ')
         population.to_csv(str(output_folder / datasets.output_population_csv.file_name))
@@ -508,7 +511,8 @@ if __name__ == '__main__':
 
     # not used in this stub but often useful for finding various files
     project_dir = Path(__file__).resolve().parents[2]
-    data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
+    city = 'DW'
+    data_folder = project_dir / 'data' / 'processed' / 'poland' / city
 
     # To read population data from a file:
     # sim_dir = project_dir / 'data' / 'simulations' / '20200327_1052'
@@ -525,8 +529,8 @@ if __name__ == '__main__':
     # population[entities.prop_employment_status] = generate_employment(data_folder,
     #                                                                  population[[entities.prop_age,
     #                                                                              entities.prop_gender]])
-    other = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
+    other = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams()),
+             entities.prop_ishealthcare: (IsHealthCare(), IsHealthCareParams(city))}
 
     # or to generate a new dataset
-    for i in range(10):
-        generate(data_folder, other_features=other)
+    generate(data_folder, other_features=other)
