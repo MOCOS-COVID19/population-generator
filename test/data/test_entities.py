@@ -80,3 +80,18 @@ class TestNodes(TestCase):
         self.assertEqual(new_household, node.household)
 
 
+class TestAgeGroups(TestCase):
+    def test_young(self):
+        expected = entities.AgeGroup.young
+        acutal = entities.to_age_group(1, 0, 0)
+        self.assertEqual(expected, acutal)
+
+    def test_middle(self):
+        expected = entities.AgeGroup.middle
+        acutal = entities.to_age_group(0, 1, 0)
+        self.assertEqual(expected, acutal)
+
+    def test_elderly(self):
+        expected = entities.AgeGroup.elderly
+        acutal = entities.to_age_group(0, 0, 1)
+        self.assertEqual(expected, acutal)

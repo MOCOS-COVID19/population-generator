@@ -38,6 +38,11 @@ class AgeGroup(Enum):
     elderly = 2
 
 
+def to_age_group(young, middle, elderly):
+    individual = middle + 2*elderly
+    return AgeGroup(individual)
+
+
 class Gender(Enum):
     NOT_SET = -1
     MALE = 0

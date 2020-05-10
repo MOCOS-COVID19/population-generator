@@ -316,8 +316,13 @@ def generate_population(data_folder: Path, output_folder: Path,
     # initial household assignemtn
     population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
 
+    # get group accommodation facilities
+    group_accommodation_facilities = pd.read_csv(str(data_folder / datasets.social_care_houses_csv.file_name))
+    headcount_in_group_accommodation_facilities = group_accommodation_facilities.headcount.sum()
+
     # get households
-    households = generate_households(data_folder, output_folder, population_size)
+    households = generate_households(data_folder, output_folder,
+                                     population_size - headcount_in_group_accommodation_facilities)
 
     logging.info('House master assignment')
     assign_house_masters(households, population)
@@ -331,14 +336,28 @@ def generate_population(data_folder: Path, output_folder: Path,
     for homeless_l in _homeless_indices.values():
         random.shuffle(homeless_l)
 
+    households_prop_unassigned_occupants_idx = households.columns.get_loc(entities.h_prop_unassigned_occupants)
+    households_prop_inhabitants_idx = households.columns.get_loc(entities.h_prop_inhabitants)
+    population_prop_household_idx = population.columns.get_loc(entities.prop_household)
+    # FIXME: at this point h_prop_inhabitants column does not exist in group_accommodation
+    group_accommodation_prop_inhabitants_idx = group_accommodation_facilities.get_loc(entities.h_prop_inhabitants)
+
+    logging.info('Assigning people to group accommodation facilities')
+    age_groups_in_facilities = group_accommodation_facilities[['young', 'middle', 'elderly']].sum(axis=1)
+    for facility_idx, facility in group_accommodation_facilities.iterrows():
+        inhabitants = []
+        if age_groups_in_facilities.iat[facility_idx] == 1:
+            age_group = entities.to_age_group(facility.young, facility.middle, facility.elderly)
+            for _ in range(facility.headcount):
+                homeless_idx = _homeless_indices[age_group].pop()
+                population.iat[homeless_idx, population_prop_household_idx] = facility.id  # FIXME: clash with regular households
+                inhabitants.append(homeless_idx)
+        group_accommodation_facilities.iat[facility_idx, households_prop_inhabitants_idx] = str(inhabitants)
+
     logging.info('Selecting households with housemasters and headcount greater than 1...')
     households2 = households[(households.household_headcount > 1)
                              & (households.house_master_index != entities.HOUSEHOLD_NOT_ASSIGNED)]
     households_interim = defaultdict(list)
-
-    households_prop_unassigned_occupants_idx = households.columns.get_loc(entities.h_prop_unassigned_occupants)
-    households_prop_inhabitants_idx = households.columns.get_loc(entities.h_prop_inhabitants)
-    population_prop_household_idx = population.columns.get_loc(entities.prop_household)
 
     try:
         for idx, household_row in tqdm(households2.iterrows(), desc='Lodging population - first assignments',
