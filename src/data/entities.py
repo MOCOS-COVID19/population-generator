@@ -13,22 +13,16 @@ prop_public_transport_usage = 'public_transport_usage'
 prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
+prop_industrial_section = 'industrial_section'
+prop_company_size = 'company_size'
 prop_ishealthcare = 'ishealthcare'
 
 # auxiliary
 prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
-data_types = {prop_idx: np.uint64,
-              prop_age: np.int8,
-              prop_gender: np.int8,
-              prop_employment_status: np.int8,
-              prop_social_competence: np.float,
-              prop_public_transport_usage: np.int8,
-              prop_public_transport_duration: np.float,
-              prop_household: np.uint64,
-              prop_profession: np.uint64}
+           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare,
+           prop_industrial_section, prop_company_size]
 
 h_prop_household_index = 'household_index'
 h_prop_inhabitants = 'idx'
@@ -68,6 +62,11 @@ class EmploymentStatus(Enum):
     NOT_SET = -1
     NOT_EMPLOYED = 0
     EMPLOYED = 1
+
+
+class HealthCare(Enum):
+    YES = 1
+    NO = 0
 
 
 class EconomicalGroup(Enum):
