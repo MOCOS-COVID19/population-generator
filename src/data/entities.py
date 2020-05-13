@@ -14,7 +14,6 @@ prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_profession = 'profession'
 prop_industrial_section = 'industrial_section'
-prop_company_size = 'company_size'
 prop_ishealthcare = 'ishealthcare'
 
 # auxiliary
@@ -22,7 +21,7 @@ prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
            prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare,
-           prop_industrial_section, prop_company_size]
+           prop_industrial_section]
 
 h_prop_household_index = 'household_index'
 h_prop_inhabitants = 'idx'

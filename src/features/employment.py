@@ -1,7 +1,7 @@
 import random
 from typing import List, Dict
+
 import pandas as pd
-import numpy as np
 
 from src.data import entities as en
 from src.data.datasets import job_market_xlsx, employment_rate_by_age_csv
@@ -19,19 +19,21 @@ class Employment(Feature):
     middle_aged_class = 2  # 25-54
     middle_aged_immobile_class = 3  # 55-64
     working_age_classes = [young_adults_class, middle_aged_class, middle_aged_immobile_class]
+    males_col = 'males'
+    females_col = 'females'
 
-    def _process_gender_section(self, total_number: int, section_id: str, section_company_size: int,
-                                people: Dict[int, List[int]], employment_rate_by_age: Dict[int, int],
-                                employment_status: pd.Series, industrial_section: pd.Series,
-                                is_healthcare: pd.Series, company_size: pd.Series):
+    def _assign_workplace_genderwise(self, job_market_share, people: Dict[int, List[int]],
+                                     employment_status: pd.Series, industrial_section: pd.Series,
+                                     is_healthcare: pd.Series):
 
-        for _ in range(total_number):
-            employee_idx = people.pop()
-            employment_status.iat[employee_idx] = en.EmploymentStatus.EMPLOYED.value
-            industrial_section.iat[employee_idx] = section_id
-            company_size.iat[employee_idx] = section_company_size
-            if section_id == self.healthcare_section:
-                is_healthcare.iat[employee_idx] = en.HealthCare.YES.value
+        for section_id, section_row in job_market_share.iterrows():
+            for age_group in self.working_age_classes:
+                for _ in range(section_row[age_group]):
+                    employee_idx = people[age_group].pop()
+                    employment_status.iat[employee_idx] = en.EmploymentStatus.EMPLOYED.value
+                    industrial_section.iat[employee_idx] = section_id
+                    if section_id == self.healthcare_section:
+                        is_healthcare.iat[employee_idx] = en.HealthCare.YES.value
 
     def _split_shuffle_population_by_age(self, population, gender):
         """
@@ -51,31 +53,32 @@ class Employment(Feature):
 
         return people_by_age
 
-    def _get_employed_per_age_group(self, employment_rate_per_age, gender_by_age):
-        """
-        Calculate the number of employed people in each age class, including elderly
-        :param employment_rate_per_age: employment rate for total population and all age classes within working age
-        :param gender_by_age: people of a specific gender grouped into age groups
-        :return: dictionary of number of employed people in each age group
-        """
-        output_employment_rate = {}
-        for age_class in [self.young_adults_class, self.middle_aged_class, self.middle_aged_immobile_class]:
-            class_size = len(gender_by_age[age_class])
-            class_employment_rate = employment_rate_per_age.loc[employment_rate_per_age.age_class == age_class,
-                                                                'percentage'] / 100
-            employed_in_class = int(np.round(class_employment_rate * class_size))
-            output_employment_rate[age_class] = employed_in_class
+    def _get_job_market_per_age_group(self, employment_rate_per_age, gender_by_age, job_market_df, gender_column):
 
-        return output_employment_rate
-
-    @staticmethod
-    def _scale_job_market(job_market_df, gender_column, gender_employment_rate_by_age):
-        return (job_market_df[gender_column] / job_market_df[gender_column].sum() \
-                * sum(gender_employment_rate_by_age.values())).round(0).astype(int)
+        # take the number of people in working age
+        number_of_people = {age_group: len(people) for age_group, people in gender_by_age.items()}
+        # get employment rate in each age group
+        employment_rate = (employment_rate_per_age.loc[employment_rate_per_age.age_class.isin(
+            self.working_age_classes), 'percentage'] / 100).to_dict()
+        # get the number of employed people within each age group
+        employment_per_age_group = {age_group: empl_rate_in_group * number_of_people[age_group] for
+                                    age_group, empl_rate_in_group in employment_rate.items()}
+        # calculate the total number of employed
+        total_employed = sum(employment_per_age_group.values())
+        # find the fraction of employed that come from each age group
+        job_market_share = {age_group: employed / total_employed for age_group, employed in
+                            employment_per_age_group.items()}
+        # scale the job market  so that proportions of people working in each sector hold
+        scaled_job_market = job_market_df[gender_column] * total_employed / job_market_df[gender_column].sum()
+        # distribute the job market among age groups according to the job market share
+        job_market_per_age_group = {age_group: scaled_job_market * job_market_share_in_group for
+                                    age_group, job_market_share_in_group in job_market_share.items()}
+        job_market_per_age_group['id'] = job_market_df['id']
+        # round and cast to int
+        return pd.DataFrame(data=job_market_per_age_group).set_index('id').round().astype(int)
 
     def generate(self, population_size: int, params: EmploymentParams,
                  population: pd.DataFrame) -> pd.DataFrame:
-
         employment_status = pd.Series(index=population.index, data=en.EmploymentStatus.NOT_EMPLOYED.value)
         industrial_section = pd.Series(index=population.index, data='')
         is_healthcare = pd.Series(index=population.index, data=en.HealthCare.NO.value)
@@ -88,28 +91,26 @@ class Employment(Feature):
         # employment rate in age group
         employment_rate_by_age = pd.read_csv(str(params.data_folder / employment_rate_by_age_csv.file_name))
         # columns: age_range, percentage, age_class
-        female_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, females_by_age)
-        male_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, males_by_age)
+        # female_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, females_by_age)
+        # male_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, males_by_age)
 
         # number of working people in the city
         job_market = pd.read_excel(str(params.data_folder / job_market_xlsx.file_name),
                                    sheet_name=job_market_xlsx.sheet_name)
         # columns: id, company_size, males, females
-        # scale to much the number of employees in the population
-        job_market.males = self._scale_job_market(job_market, 'males', male_employment_rate_by_age)
-        job_market.females = self._scale_job_market(job_market, 'females', female_employment_rate_by_age)
+
+        females_job_market = self._get_job_market_per_age_group(employment_rate_by_age, females_by_age, job_market,
+                                                                self.females_col)
+        males_job_market = self._get_job_market_per_age_group(employment_rate_by_age, males_by_age, job_market,
+                                                              self.males_col)
 
         # allocate people to jobs
-        for section_idx, section in job_market.iterrows():
-            self._process_gender_section(section.females, section.id, section.company_size, females_by_age,
-                                         employment_rate_by_age,
-                                         employment_status, industrial_section, is_healthcare, company_size)
-            self._process_gender_section(section.males, section.id, section.company_size, males_by_age,
-                                         employment_rate_by_age,
-                                         employment_status, industrial_section, is_healthcare, company_size)
+        self._assign_workplace_genderwise(females_job_market, females_by_age, employment_status, industrial_section,
+                                          is_healthcare)
+        self._assign_workplace_genderwise(males_job_market, males_by_age, employment_status, industrial_section,
+                                          is_healthcare)
 
         population[en.prop_employment_status] = employment_status
         population[en.prop_industrial_section] = industrial_section
         population[en.prop_ishealthcare] = is_healthcare
-        population[en.prop_company_size] = company_size
         return population
