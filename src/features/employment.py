@@ -86,8 +86,7 @@ class Employment(Feature):
         # round and cast to int
         return pd.DataFrame(data=job_market_per_age_group).set_index('id').round().astype(int)
 
-    def generate(self, population_size: int, params: EmploymentParams,
-                 population: pd.DataFrame) -> pd.DataFrame:
+    def generate(self, params: EmploymentParams, population: pd.DataFrame) -> pd.DataFrame:
         employment_status = pd.Series(index=population.index, data=en.EmploymentStatus.NOT_EMPLOYED.value)
         industrial_section = pd.Series(index=population.index, data='')
         is_healthcare = pd.Series(index=population.index, data=en.HealthCare.NO.value)

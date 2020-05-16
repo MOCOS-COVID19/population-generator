@@ -20,7 +20,7 @@ class TestEmployment(TestCase):
 
     def test_employment(self):
         population_size = len(self.population.index)
-        population = Employment().generate(population_size, EmploymentParams(self.data_folder), self.population)
+        population = Employment().generate(EmploymentParams(self.data_folder), self.population)
         population_columns = population.columns.tolist()
         self.assertIn(prop_industrial_section, population_columns)
         self.assertIn(prop_employment_status, population_columns)

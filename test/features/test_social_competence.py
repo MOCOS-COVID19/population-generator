@@ -8,7 +8,7 @@ class TestSocialCompetence(TestCase):
 
     def test_should_generate_social_competence_vector_between_0_and_1(self):
         size = 10
-        result = SocialCompetence().generate(size, SocialCompetenceParams(),
+        result = SocialCompetence().generate(SocialCompetenceParams(),
                                              pd.DataFrame(index=list(range(size)), columns=['whatever']))
         self.assertEqual(size, result.shape[0])
         self.assertEqual(2, result.shape[1])  # whatever and social competence

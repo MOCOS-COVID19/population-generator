@@ -74,14 +74,16 @@ class PopulationGenerator(ABC):
         raise NotImplementedError()
 
     def _add_other_features(self, population: pd.DataFrame,
-                            other_features: Dict[str, Tuple[Feature, FeatureParams]]) -> pd.DataFrame:
-        for feature_col, (feature, feature_params) in other_features.items():
-            population = feature.generate(len(population.index), feature_params, population)
+                            other_features: Optional[List[Tuple[Feature, FeatureParams]]] = None) -> pd.DataFrame:
+        if other_features is None:
+            return population
+        for feature, feature_params in other_features:
+            population = feature.generate(feature_params, population)
         return population
 
     def run(self, household_start_index: Optional[int] = 0, population_start_index: Optional[int] = 0,
             simulation_folder: Optional[Path] = None,
-            other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> Tuple[int, int]:
+            other_features: Optional[List[Tuple[Feature, FeatureParams]]] = None) -> Tuple[int, int]:
         """Main generation function. Given a starting household_index and a starting population_index, as well as
         the path to a folder where simulation results are to be saved, this function generates population and
         households in a voivodship the generator was initialized with. """

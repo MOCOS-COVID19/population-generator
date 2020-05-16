@@ -8,5 +8,5 @@ class FeatureParams:
 
 
 class Feature:
-    def generate(self, population_size: int, params: FeatureParams, population: pd.DataFrame) -> pd.DataFrame:
+    def generate(self, params: FeatureParams, population: pd.DataFrame) -> pd.DataFrame:
         raise NotImplementedError('Each feature should implement this')

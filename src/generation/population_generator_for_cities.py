@@ -470,7 +470,7 @@ def generate_population(data_folder: Path, output_folder: Path,
                                   entities.prop_idx)
         logging.info('Other features')
         for feature, feature_params in other_features:
-            population = feature.generate(population_size, feature_params, population)
+            population = feature.generate(feature_params, population)
     finally:
         logging.info('Saving a population to a file... ')
         population.to_csv(str(output_folder / datasets.output_population_csv.file_name))

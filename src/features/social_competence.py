@@ -20,8 +20,7 @@ class SocialCompetenceParams(FeatureParams):
 
 class SocialCompetence(Feature):
 
-    def generate(self, population_size: int,
-                 params: SocialCompetenceParams = SocialCompetenceParams(),
+    def generate(self, params: SocialCompetenceParams = SocialCompetenceParams(),
                  population: pd.DataFrame = None) -> pd.DataFrame:
         """
         After [1] social competence (introversion and extraversion) are modelled according to a normal distribution with
@@ -33,7 +32,7 @@ class SocialCompetence(Feature):
         :param population: population sample
         :return: social competence vector of a population
         """
-        x = sample_from_distribution(population_size, params.distribution_name, loc=params.loc,
+        x = sample_from_distribution(len(population.index), params.distribution_name, loc=params.loc,
                                      scale=params.scale)
         population[prop_social_competence] = np.clip(x, 0, 1).reshape(-1, 1)
         return population

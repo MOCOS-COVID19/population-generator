@@ -14,7 +14,7 @@ class TestHealthcare(TestCase):
         population = pd.DataFrame(data={prop_gender: gender, prop_age: age})
         population_size = len(population.index)
         featured_population = healthcare.IsHealthCare() \
-            .generate(population_size, healthcare.IsHealthCareParams('D'), population)
+            .generate(healthcare.IsHealthCareParams('D'), population)
         self.assertEqual(population_size, len(featured_population.index))
         self.assertIn(prop_ishealthcare, featured_population.columns.tolist())
         # too young
