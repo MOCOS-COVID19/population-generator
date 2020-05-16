@@ -12,23 +12,14 @@ prop_social_competence = 'social_competence'
 prop_public_transport_usage = 'public_transport_usage'
 prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
-prop_profession = 'profession'
+prop_industrial_section = 'industrial_section'
 prop_ishealthcare = 'ishealthcare'
 
 # auxiliary
 prop_age_generation = 'age_generation'
 
 columns = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-           prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
-data_types = {prop_idx: np.uint64,
-              prop_age: np.int8,
-              prop_gender: np.int8,
-              prop_employment_status: np.int8,
-              prop_social_competence: np.float,
-              prop_public_transport_usage: np.int8,
-              prop_public_transport_duration: np.float,
-              prop_household: np.uint64,
-              prop_profession: np.uint64}
+           prop_public_transport_usage, prop_public_transport_duration, prop_ishealthcare, prop_industrial_section]
 
 h_prop_household_index = 'household_index'
 h_prop_inhabitants = 'idx'
@@ -70,6 +61,11 @@ class EmploymentStatus(Enum):
     EMPLOYED = 1
 
 
+class HealthCare(Enum):
+    YES = 1
+    NO = 0
+
+
 class EconomicalGroup(Enum):
     PRZEDPRODUKCYJNY = 0
     PRODUKCYJNY_MOBILNY = 1
@@ -79,7 +75,7 @@ class EconomicalGroup(Enum):
 
 HEALTHCARE_NOT_ASSIGNED = -1
 HOUSEHOLD_NOT_ASSIGNED = -1
-PROFESSION_NOT_ASSIGNED = -1
+INDUSTRIAL_SECTION_NOT_ASSIGNED = ''
 SOCIAL_COMPETENCE_NOT_ASSIGNED = -1
 AGE_NOT_SET = -1
 PUBLIC_TRANSPORT_USAGE_NOT_SET = -1
@@ -185,7 +181,8 @@ class BasicNode(dict, metaclass=BasicNodeMeta):
 
 class Node(BasicNode):
     _output_fields = [prop_idx, prop_age, prop_gender, prop_household, prop_employment_status, prop_social_competence,
-                      prop_public_transport_usage, prop_public_transport_duration, prop_profession, prop_ishealthcare]
+                      prop_public_transport_usage, prop_public_transport_duration, prop_industrial_section,
+                      prop_ishealthcare]
 
     def __init__(self, age: int = AGE_NOT_SET,
                  gender: Gender = Gender.NOT_SET,
@@ -194,7 +191,7 @@ class Node(BasicNode):
                  public_transport_usage: float = PUBLIC_TRANSPORT_USAGE_NOT_SET,
                  public_transport_duration: float = PUBLIC_TRANSPORT_DURATION_NOT_SET,
                  household: int = HOUSEHOLD_NOT_ASSIGNED,
-                 profession: int = PROFESSION_NOT_ASSIGNED,
+                 industrial_section: str = INDUSTRIAL_SECTION_NOT_ASSIGNED,
                  is_healthcare: int = HEALTHCARE_NOT_ASSIGNED,
                  age_generation: Optional[str] = '') -> None:
         """
@@ -216,7 +213,7 @@ class Node(BasicNode):
         self[prop_employment_status] = employment_status.value
         self[prop_public_transport_usage] = public_transport_usage
         self[prop_public_transport_duration] = public_transport_duration
-        self[prop_profession] = profession
+        self[prop_industrial_section] = industrial_section
         self[prop_ishealthcare] = is_healthcare
 
     @property
@@ -244,12 +241,12 @@ class Node(BasicNode):
         self[prop_public_transport_duration] = public_transport_duration
 
     @property
-    def profession(self) -> int:
-        return self[prop_profession]
+    def industrial_section(self) -> int:
+        return self[prop_industrial_section]
 
-    @profession.setter
-    def profession(self, profession: int) -> None:
-        self[prop_profession] = profession
+    @industrial_section.setter
+    def industrial_section(self, industrial_section: int) -> None:
+        self[prop_industrial_section] = industrial_section
 
     @classmethod
     def output_fields(cls) -> List[str]:

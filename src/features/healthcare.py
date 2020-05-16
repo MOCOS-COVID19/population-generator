@@ -22,8 +22,8 @@ class IsHealthCare(Feature):
         healthcare_workers_file = project_dir / 'data' / 'processed' / 'poland' / healthcare_workers_xlsx.file_name
         self.healthcare_workers = pd.read_excel(healthcare_workers_file, index_col=0)
 
-    def generate(self, population_size: int, params: IsHealthCareParams,
-                 population: pd.DataFrame) -> Union[pd.Series, np.ndarray]:
+    def generate(self, params: IsHealthCareParams, population: pd.DataFrame) -> pd.DataFrame:
+        population_size = len(population.index)
         females = population[(population[prop_gender] == Gender.FEMALE.value)
                              & (population[prop_age] >= 22) & (population[prop_age] < 60)].index.tolist()
         males = population[(population[prop_gender] == Gender.MALE.value)

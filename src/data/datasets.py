@@ -52,3 +52,5 @@ voivodship_cities_household_family_structure_xlsx = XlsxFile('voivodship_cities_
 generations_xlsx = XlsxFile('generations.xlsx', 'Sheet1')
 
 healthcare_workers_xlsx = XlsxFile('healthcare_workers.xlsx', 'Sheet1')
+job_market_xlsx = XlsxFile('job_market.xlsx', 'processed')
+employment_rate_by_age_csv = CsvFile('employment_rate_by_age.csv')

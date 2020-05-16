@@ -27,14 +27,14 @@ class TestNodesToDataFrame(TestCase):
                               social_competence=0.3,
                               public_transport_duration=0,
                               public_transport_usage=False,
-                              household=1, profession=entities.PROFESSION_NOT_ASSIGNED,
+                              household=1, industrial_section=entities.INDUSTRIAL_SECTION_NOT_ASSIGNED,
                               age_generation=entities.AgeGroup.young.value, is_healthcare=0)
         node2 = entities.Node(age=37, gender=entities.Gender.FEMALE,
                               employment_status=entities.EmploymentStatus.EMPLOYED,
                               social_competence=0.7,
                               public_transport_duration=30,
                               public_transport_usage=True,
-                              household=1, profession=7,
+                              household=1, industrial_section='A',
                               age_generation=entities.AgeGroup.middle.value, is_healthcare=1)
         nodes = [node1, node2]
 
@@ -57,7 +57,7 @@ class TestNodesToDataFrame(TestCase):
         self.assertEqual(node.public_transport_usage, row[entities.prop_public_transport_usage])
         self.assertEqual(node.public_transport_duration, row[entities.prop_public_transport_duration])
         self.assertEqual(node.household, row[entities.prop_household])
-        self.assertEqual(node.profession, row[entities.prop_profession])
+        self.assertEqual(node.industrial_section, row[entities.prop_industrial_section])
 
 
 class TestDistributionRetrieval(TestCase):

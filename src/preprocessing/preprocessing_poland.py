@@ -265,8 +265,29 @@ def generate_generations_configuration(data_folder: Path) -> pd.DataFrame:
     return pivoted
 
 
-if __name__ == '__main__':
-    project_dir = Path(__file__).resolve().parents[2]
+def voivodship_to_symbol(voivodship: str):
+    voivodship = voivodship.lower()
+    voivodship_dict = {
+        'podlaskie': 'B',
+        'kujawsko-pomorskie': 'C',
+        'dolnośląskie': 'D',
+        'łódzkie': 'E',
+        'lubuskie': 'F',
+        'pomorskie': 'G',
+        'małopolskie': 'K',
+        'lubelskie': 'L',
+        'warmińsko-mazurskie': 'N',
+        'opolskie': 'O',
+        'wielkopolskie': 'P',
+        'podkarpackie': 'R',
+        'śląskie': 'S',
+        'świętokrzyskie': 'T',
+        'mazowieckie': 'W',
+        'zachodniopomorskie': 'Z'}
+    return voivodship_dict.get(voivodship)
+
+    if __name__ == '__main__':
+        project_dir = Path(__file__).resolve().parents[2]
     city_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
     prepare_family_structure_from_voivodship(city_folder)
     generate_generations_configuration(city_folder)

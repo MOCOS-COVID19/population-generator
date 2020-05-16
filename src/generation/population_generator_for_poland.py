@@ -7,8 +7,8 @@ from xlrd import XLRDError
 import mocos_helper
 
 from src.data.datasets import *
-from src.data.entities import BasicNode, GENDERS, Gender, prop_social_competence, prop_ishealthcare
-from src.features import SocialCompetence, SocialCompetenceParams, IsHealthCareParams, IsHealthCare
+from src.data.entities import BasicNode, GENDERS, Gender
+from src.features import SocialCompetence, SocialCompetenceParams, Employment, EmploymentParams
 from src.generation.population_generator import PopulationGenerator
 from src.generation.population_generator_common import prepare_simulations_folder, get_age_gender_df
 
@@ -159,10 +159,10 @@ if __name__ == '__main__':
     next_household_index = 0
     next_person_index = 0
     poland_simulations_folder = prepare_simulations_folder()
-    other_features = {prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
-    for i, item in enumerate(voivodships):
-        other_features[prop_ishealthcare] = (IsHealthCare(), IsHealthCareParams(item.name))
-        next_household_index, next_person_index = PolishPopulationGenerator(poland_folder, item).run(
+    social_feature = (SocialCompetence(), SocialCompetenceParams())
+    for i, voivodship_folder in enumerate(voivodships):
+        other_features = [social_feature, (Employment(), EmploymentParams(voivodship_folder))]
+        next_household_index, next_person_index = PolishPopulationGenerator(poland_folder, voivodship_folder).run(
             next_household_index,
             next_person_index,
             poland_simulations_folder,

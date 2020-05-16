@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from collections import defaultdict
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -12,8 +12,8 @@ import random
 
 from src.data import datasets, entities
 from src.preprocessing import preprocessing_poland
-from src.features import (Feature, FeatureParams, SocialCompetence, SocialCompetenceParams, IsHealthCareParams,
-                          IsHealthCare)
+from src.features import (Feature, FeatureParams, SocialCompetence, SocialCompetenceParams, EmploymentParams,
+                          Employment)
 from src.generation.population_generator_common import (age_gender_population,
                                                         sample_from_distribution,
                                                         rename_index, drop_obsolete_columns,
@@ -293,7 +293,7 @@ def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFra
 
 
 def generate_population(data_folder: Path, output_folder: Path,
-                        other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> \
+                        other_features: List[Tuple[Feature, FeatureParams]] = []) -> \
         Tuple[pd.DataFrame, pd.DataFrame]:
     # if population already generated, read from file
     population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
@@ -469,8 +469,8 @@ def generate_population(data_folder: Path, output_folder: Path,
         population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)),
                                   entities.prop_idx)
         logging.info('Other features')
-        for feature_col, (feature, feature_params) in other_features.items():
-            population = feature.generate(population_size, feature_params, population)
+        for feature, feature_params in other_features:
+            population = feature.generate(feature_params, population)
     finally:
         logging.info('Saving a population to a file... ')
         population.to_csv(str(output_folder / datasets.output_population_csv.file_name))
@@ -485,7 +485,7 @@ def generate_population(data_folder: Path, output_folder: Path,
 
 
 def generate(data_folder: Path, simulations_folder: Path = None,
-             other_features: Dict[str, Tuple[Feature, FeatureParams]] = {}) -> Tuple[pd.DataFrame, pd.DataFrame]:
+             other_features: List[Tuple[Feature, FeatureParams]] = []) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Generates a population given the folder with data and the size of this population.
     :param data_folder: folder with data
@@ -514,23 +514,8 @@ if __name__ == '__main__':
     city = 'DW'
     data_folder = project_dir / 'data' / 'processed' / 'poland' / city
 
-    # To read population data from a file:
-    # sim_dir = project_dir / 'data' / 'simulations' / '20200327_1052'
-    # generate(data_folder, simulations_folder=sim_dir, other_features=False)
-
-    # social competence based on previous findings, probably to be changed
-    # population[entities.prop_social_competence] = generate_social_competence(len(population.index))
-    # transportation
-    # population[entities.prop_public_transport_usage] = generate_public_transport_usage(len(population.index))
-    # transportation duration
-    # population[entities.prop_public_transport_duration] = generate_public_transport_duration(
-    #    population[entities.prop_public_transport_usage])
-
-    # population[entities.prop_employment_status] = generate_employment(data_folder,
-    #                                                                  population[[entities.prop_age,
-    #                                                                              entities.prop_gender]])
-    other = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams()),
-             entities.prop_ishealthcare: (IsHealthCare(), IsHealthCareParams(city))}
+    other = [(SocialCompetence(), SocialCompetenceParams()),
+             (Employment(), EmploymentParams(data_folder))]
 
     # or to generate a new dataset
     generate(data_folder, other_features=other)

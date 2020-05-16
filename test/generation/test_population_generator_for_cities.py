@@ -64,7 +64,7 @@ class TestGeneratePopulation(TestCase):
     def setUpClass(cls) -> None:
         cls.resources_dir = Path(__file__).resolve().parents[0] / 'resources'
         cls.output_dir = Path(__file__).resolve().parents[0] / 'output'
-        other_features = {entities.prop_social_competence: (SocialCompetence(), SocialCompetenceParams())}
+        other_features = [(SocialCompetence(), SocialCompetenceParams())]
         cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, other_features)
 
     @classmethod
