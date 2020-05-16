@@ -53,16 +53,25 @@ class Employment(Feature):
 
         return people_by_age
 
-    def _get_job_market_per_age_group(self, employment_rate_per_age, gender_by_age, job_market_df, gender_column):
+    def _get_job_market_per_age_group(self, employment_rate_per_age_gender, gender_by_age, job_market_df, gender_column):
 
         # take the number of people in working age
         number_of_people = {age_group: len(people) for age_group, people in gender_by_age.items()}
         # get employment rate in each age group
-        employment_rate = (employment_rate_per_age.loc[employment_rate_per_age.age_class.isin(
-            self.working_age_classes), 'percentage'] / 100).to_dict()
+        # employment_rate = (employment_rate_per_age_gender.loc[employment_rate_per_age_gender.age_class.isin(
+        #     self.working_age_classes), gender_column] / 100).to_dict()
         # get the number of employed people within each age group
-        employment_per_age_group = {age_group: empl_rate_in_group * number_of_people[age_group] for
-                                    age_group, empl_rate_in_group in employment_rate.items()}
+        # employment_per_age_group = {age_group: empl_rate_in_group * number_of_people[age_group] for
+        #                             age_group, empl_rate_in_group in employment_rate.items()}
+
+        employment_per_age_group = {}
+        for age_group in self.working_age_classes:
+            employment_rate = employment_rate_per_age_gender.loc\
+                                                           [(employment_rate_per_age_gender.age_class == age_group),
+                                                            gender_column].iloc[0]
+            employed_count = employment_rate * number_of_people[age_group] / 100
+            employment_per_age_group[age_group] = employed_count
+
         # calculate the total number of employed
         total_employed = sum(employment_per_age_group.values())
         # find the fraction of employed that come from each age group
@@ -90,9 +99,7 @@ class Employment(Feature):
 
         # employment rate in age group
         employment_rate_by_age = pd.read_csv(str(params.data_folder / employment_rate_by_age_csv.file_name))
-        # columns: age_range, percentage, age_class
-        # female_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, females_by_age)
-        # male_employment_rate_by_age = self._get_employed_per_age_group(employment_rate_by_age, males_by_age)
+        # columns: age_range, males, females, age_class
 
         # number of working people in the city
         job_market = pd.read_excel(str(params.data_folder / job_market_xlsx.file_name),
