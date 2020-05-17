@@ -187,4 +187,10 @@ class TestGroupAccommodationFacilities(TestCase):
         gaf_inhabitants = self.population[self.population[entities.prop_household] == last_index]
         self.assertEqual(15, len(gaf_inhabitants.index))
 
+    def test_gaf_type_set(self):
+        gaf_indices = self.households[entities.h_prop_household_index].nlargest(2).index.tolist()
+        gaf_inhabitants = self.population[self.population[entities.prop_household].isin(gaf_indices)]
+        expected_value = entities.GroupAccommodationFacility.SocialCareHouse.value * len(gaf_inhabitants.index)
+        self.assertEqual(expected_value, gaf_inhabitants[entities.prop_gaf_type].sum())
+
 

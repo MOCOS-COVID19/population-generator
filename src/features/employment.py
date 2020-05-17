@@ -90,7 +90,6 @@ class Employment(Feature):
         employment_status = pd.Series(index=population.index, data=en.EmploymentStatus.NOT_EMPLOYED.value)
         industrial_section = pd.Series(index=population.index, data='')
         is_healthcare = pd.Series(index=population.index, data=en.HealthCare.NO.value)
-        company_size = pd.Series(index=population.index, data=0)
 
         # shuffle people in the population
         females_by_age = self._split_shuffle_population_by_age(population, en.Gender.FEMALE)

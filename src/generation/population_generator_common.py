@@ -92,7 +92,7 @@ def fix_empty_households(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def cleanup_population(df: pd.DataFrame) -> pd.DataFrame:
-    return age_range_to_age(drop_obsolete_columns(fix_homeless(df), entities.columns))
+    return age_range_to_age(drop_obsolete_columns(fix_homeless(df), entities.person_columns))
 
 
 def get_age_gender_df(data_folder: Path, sheet_name: Optional[str] = datasets.age_gender_xlsx.sheet_name) \

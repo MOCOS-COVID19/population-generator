@@ -281,13 +281,14 @@ def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFra
     return pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
 
 
-def assign_people_to_gafs(gaf, gaf_first_index, population, homeless_indices):
+def assign_people_to_gafs(gaf, gaf_type, gaf_first_index, population, homeless_indices):
     gaf_count = len(gaf.index)
     gaf[entities.h_prop_household_index] = list(range(gaf_first_index, gaf_first_index + gaf_count))
     gaf[entities.h_prop_inhabitants] = '[]'
     gaf = gaf.set_index(entities.h_prop_household_index)
 
     gaf_prop_inhabitants_idx = gaf.columns.get_loc(entities.h_prop_inhabitants)
+    population_prop_gaf_type_idx = population.columns.get_loc(entities.prop_gaf_type)
     population_prop_household_idx = population.columns.get_loc(entities.prop_household)
 
     for facility_idx, facility in gaf.iterrows():
@@ -297,6 +298,7 @@ def assign_people_to_gafs(gaf, gaf_first_index, population, homeless_indices):
         for age_group in age_groups_permuted:
             homeless_idx = homeless_indices[age_group.name].pop()
             population.iat[homeless_idx, population_prop_household_idx] = facility_idx
+            population.iat[homeless_idx, population_prop_gaf_type_idx] = gaf_type
             inhabitants.append(homeless_idx)
 
         gaf.loc[facility_idx].iat[gaf_prop_inhabitants_idx] = str(inhabitants)
@@ -325,6 +327,9 @@ def generate_population(data_folder: Path, output_folder: Path,
 
     # initial household assignemtn
     population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
+
+    # initial group accommodation facility assignment
+    population[entities.prop_gaf_type] = entities.GAF_TYPE_NOT_ASSIGNED
 
     # get group accommodation facilities - GAF
     try:
@@ -359,7 +364,8 @@ def generate_population(data_folder: Path, output_folder: Path,
 
     if gaf is not None:
         gaf_first_index = households[entities.h_prop_household_index].max() + 1
-        assign_people_to_gafs(gaf, gaf_first_index, population, _homeless_indices)
+        assign_people_to_gafs(gaf, entities.GroupAccommodationFacility.SocialCareHouse.value,
+                              gaf_first_index, population, _homeless_indices)
 
     logging.info('Selecting households with housemasters and headcount greater than 1...')
     households2 = households[(households.household_headcount > 1)
@@ -492,7 +498,7 @@ def generate_population(data_folder: Path, output_folder: Path,
                                     1, 1)
 
         logging.info('Cleaning up the population dataframe')
-        population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)),
+        population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.person_columns)),
                                   entities.prop_idx)
         logging.info('Other features')
         process_other_features(population, other_features)
@@ -506,7 +512,7 @@ def generate_population(data_folder: Path, output_folder: Path,
         households = drop_obsolete_columns(households, entities.household_columns)
         if gaf is not None:
             gaf = drop_obsolete_columns(gaf.reset_index(), entities.household_columns)
-            households = pd.concat((households, gaf))
+            households = pd.concat((households, gaf)).reset_index(drop=True)
 
         households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
 
