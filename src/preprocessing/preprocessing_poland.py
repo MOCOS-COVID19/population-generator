@@ -131,7 +131,8 @@ def get_generations_configuration_df(data_folder: Path, xlsx_file: XlsxFile) -> 
     return generations_configuration_df
 
 
-def generate_household_indices(data_folder: Path, output_folder: Path, population_size: int) -> pd.DataFrame:
+def generate_household_indices(data_folder: Path, output_folder: Path, population_size: int, start_index: int = 0) \
+        -> pd.DataFrame:
     """Generates and saves to an excel file a dataframe of households. Each household consists of:
      * an index,
      * headcount,
@@ -146,7 +147,8 @@ def generate_household_indices(data_folder: Path, output_folder: Path, populatio
     :param data_folder: data folder
     :param output_folder: where to save an output file
     :param population_size: size of a population needing accommodation
-    :return:
+    :param start_index: index to start numbering households with (default 0)
+    :return: dataframe of households
     """
     household_headcount = []
     family_type = []
@@ -184,7 +186,9 @@ def generate_household_indices(data_folder: Path, output_folder: Path, populatio
             middle.extend(gc_df.loc[gc_idx, 'middle'])
             elderly.extend(gc_df.loc[gc_idx, 'elderly'])
 
-    household_df = pd.DataFrame(data=dict(household_index=list(range(len(household_headcount))),
+    household_indices = list(range(start_index, len(household_headcount) + start_index))
+
+    household_df = pd.DataFrame(data=dict(household_index=household_indices,
                                           household_headcount=household_headcount,
                                           family_type=family_type,
                                           relationship=relationship,

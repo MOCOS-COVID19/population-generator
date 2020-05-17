@@ -43,6 +43,17 @@ def to_age_group(young, middle, elderly):
     return AgeGroup(individual)
 
 
+def to_age_groups(young, middle, elderly):
+    age_groups = []
+    if young == 1:
+        age_groups.append(AgeGroup.young)
+    if middle == 1:
+        age_groups.append(AgeGroup.middle)
+    if elderly == 1:
+        age_groups.append(AgeGroup.elderly)
+    return age_groups
+
+
 class Gender(Enum):
     NOT_SET = -1
     MALE = 0

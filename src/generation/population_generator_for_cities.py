@@ -1,23 +1,38 @@
 import logging
+import random
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from collections import defaultdict
-from typing import Tuple, Dict, List
+from typing import Tuple, List, Optional
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
-import random
 
 from src.data import datasets, entities
-from src.preprocessing import preprocessing_poland
 from src.features import (Feature, FeatureParams, SocialCompetence, SocialCompetenceParams, EmploymentParams,
                           Employment)
 from src.generation.population_generator_common import (age_gender_population,
                                                         sample_from_distribution,
                                                         rename_index, drop_obsolete_columns,
                                                         age_range_to_age)
+from src.preprocessing import preprocessing_poland
+
+
+def process_other_features(population: pd.DataFrame, other_features: Optional[List[Tuple[Feature, FeatureParams]]])\
+        -> pd.DataFrame:
+    """
+    Updates individual in a population with additional features
+    :param population: population dataframe
+    :param other_features: list additional features with their parameters
+    :return: updated population dataframe
+    """
+    if other_features is None:
+        return population
+    for feature, feature_params in other_features:
+        population = feature.generate(feature_params, population)
+    return population
 
 
 def narrow_housemasters_by_headcount_and_age_group(household_by_master, household_row):
@@ -132,13 +147,15 @@ def _get_family_structure(families_and_children_df, headcount):
         logging.exception(f'Something went wrong for {headcount}')
 
 
-def generate_households(data_folder: Path, output_folder: Path, population_size: int) -> pd.DataFrame:
+def generate_households(data_folder: Path, output_folder: Path, population_size: int, start_index: int = 0) \
+        -> pd.DataFrame:
     """
     Given a population size and the path to a folder with data, generates households for this population.
     :param data_folder: path to a folder with data
     :param voivodship_folder: path to a folder with voivodship data
     :param output_folder: path to a folder where housedhols should be saved
     :param population_size: size of a population to accommodate
+    :param start_index: index to start the numbering of households with
     :return: a pandas dataframe with households to lodge the population.
     """
     households = None
@@ -154,7 +171,8 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
             households = pd.read_feather(str(output_folder / datasets.output_households_basic_feather.file_name))
         except Exception as e:
             logging.warning("Reading basic Feather failed, reason: " + str(e))
-            households = preprocessing_poland.generate_household_indices(data_folder, output_folder, population_size)
+            households = preprocessing_poland.generate_household_indices(data_folder, output_folder, population_size,
+                                                                         start_index)
 
         masters_age = []
         masters_gender = []
@@ -179,35 +197,6 @@ def generate_households(data_folder: Path, output_folder: Path, population_size:
             logging.warning("Saving interim Feather failed, reason: " + str(e))
 
     return households
-
-
-def generate_public_transport_usage(pop_size):
-    return sample_from_distribution(pop_size, 'bernoulli', 0.28)
-
-
-def generate_public_transport_duration(pop):
-    transport_users = pop[pop == 1]
-    transport_users_idx = transport_users.index.tolist()
-    transport_duration = pd.Series([0] * len(pop.index), index=pop.index)
-    mean_duration_per_day = 1.7 * 32 * len(pop.index) / len(transport_users.index)
-    x = sample_from_distribution(len(transport_users), 'norm', loc=0, scale=1)
-    scaled_x = MinMaxScaler(feature_range=(0, 2 * mean_duration_per_day)).fit_transform(x.reshape(-1, 1))
-    transport_duration.loc[transport_users_idx] = scaled_x[:, 0]
-    return transport_duration
-
-
-def generate_employment(data_folder, age_gender_pop):
-    production_age = pd.read_excel(str(data_folder / datasets.production_age.file_name))
-
-    # 4_kwartal_wroclaw_tablice
-    average_employment = 187200
-    merged = pd.merge(age_gender_pop, production_age, how='left', on=['age', 'gender'])
-    work_force = merged[merged.economic_group == 'production']
-    employed_idx = np.random.choice(work_force.index.tolist(), size=average_employment)
-
-    vector = pd.Series(data=entities.EmploymentStatus.NOT_EMPLOYED.value, index=age_gender_pop.index)
-    vector.loc[employed_idx] = entities.EmploymentStatus.EMPLOYED.value
-    return vector
 
 
 def assign_house_masters(households, population):
@@ -292,8 +281,29 @@ def age_gender_generation_population_from_files(data_folder: Path) -> pd.DataFra
     return pd.merge(population, production_age_df, on=['age', 'gender'], how='left')
 
 
+def assign_people_to_gafs(gaf, gaf_first_index, population, homeless_indices):
+    gaf_count = len(gaf.index)
+    gaf[entities.h_prop_household_index] = list(range(gaf_first_index, gaf_first_index + gaf_count))
+    gaf[entities.h_prop_inhabitants] = '[]'
+    gaf = gaf.set_index(entities.h_prop_household_index)
+
+    gaf_prop_inhabitants_idx = gaf.columns.get_loc(entities.h_prop_inhabitants)
+    population_prop_household_idx = population.columns.get_loc(entities.prop_household)
+
+    for facility_idx, facility in gaf.iterrows():
+        inhabitants = []
+        age_groups = entities.to_age_groups(facility.young, facility.middle, facility.elderly)
+        age_groups_permuted = random.choices(age_groups, k=facility.headcount)
+        for age_group in age_groups_permuted:
+            homeless_idx = homeless_indices[age_group.name].pop()
+            population.iat[homeless_idx, population_prop_household_idx] = facility_idx
+            inhabitants.append(homeless_idx)
+
+        gaf.loc[facility_idx].iat[gaf_prop_inhabitants_idx] = str(inhabitants)
+
+
 def generate_population(data_folder: Path, output_folder: Path,
-                        other_features: List[Tuple[Feature, FeatureParams]] = []) -> \
+                        other_features: Optional[List[Tuple[Feature, FeatureParams]]] = None) -> \
         Tuple[pd.DataFrame, pd.DataFrame]:
     # if population already generated, read from file
     population_ready_xlsx = output_folder / datasets.output_population_xlsx.file_name
@@ -316,13 +326,18 @@ def generate_population(data_folder: Path, output_folder: Path,
     # initial household assignemtn
     population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
 
-    # get group accommodation facilities
-    group_accommodation_facilities = pd.read_csv(str(data_folder / datasets.social_care_houses_csv.file_name))
-    headcount_in_group_accommodation_facilities = group_accommodation_facilities.headcount.sum()
+    # get group accommodation facilities - GAF
+    try:
+        gaf = pd.read_csv(str(data_folder / datasets.social_care_houses_csv.file_name))
+        gaf_headcount = gaf.headcount.sum()
+    except FileNotFoundError:
+        gaf = None
+        gaf_headcount = 0
 
     # get households
+    logging.info('Generating households')
     households = generate_households(data_folder, output_folder,
-                                     population_size - headcount_in_group_accommodation_facilities)
+                                     population_size - gaf_headcount)
 
     logging.info('House master assignment')
     assign_house_masters(households, population)
@@ -339,20 +354,12 @@ def generate_population(data_folder: Path, output_folder: Path,
     households_prop_unassigned_occupants_idx = households.columns.get_loc(entities.h_prop_unassigned_occupants)
     households_prop_inhabitants_idx = households.columns.get_loc(entities.h_prop_inhabitants)
     population_prop_household_idx = population.columns.get_loc(entities.prop_household)
-    # FIXME: at this point h_prop_inhabitants column does not exist in group_accommodation
-    group_accommodation_prop_inhabitants_idx = group_accommodation_facilities.get_loc(entities.h_prop_inhabitants)
 
     logging.info('Assigning people to group accommodation facilities')
-    age_groups_in_facilities = group_accommodation_facilities[['young', 'middle', 'elderly']].sum(axis=1)
-    for facility_idx, facility in group_accommodation_facilities.iterrows():
-        inhabitants = []
-        if age_groups_in_facilities.iat[facility_idx] == 1:
-            age_group = entities.to_age_group(facility.young, facility.middle, facility.elderly)
-            for _ in range(facility.headcount):
-                homeless_idx = _homeless_indices[age_group].pop()
-                population.iat[homeless_idx, population_prop_household_idx] = facility.id  # FIXME: clash with regular households
-                inhabitants.append(homeless_idx)
-        group_accommodation_facilities.iat[facility_idx, households_prop_inhabitants_idx] = str(inhabitants)
+
+    if gaf is not None:
+        gaf_first_index = households[entities.h_prop_household_index].max() + 1
+        assign_people_to_gafs(gaf, gaf_first_index, population, _homeless_indices)
 
     logging.info('Selecting households with housemasters and headcount greater than 1...')
     households2 = households[(households.household_headcount > 1)
@@ -488,8 +495,7 @@ def generate_population(data_folder: Path, output_folder: Path,
         population = rename_index(age_range_to_age(drop_obsolete_columns(population, entities.columns)),
                                   entities.prop_idx)
         logging.info('Other features')
-        for feature, feature_params in other_features:
-            population = feature.generate(feature_params, population)
+        process_other_features(population, other_features)
     finally:
         logging.info('Saving a population to a file... ')
         population.to_csv(str(output_folder / datasets.output_population_csv.file_name))
@@ -498,6 +504,10 @@ def generate_population(data_folder: Path, output_folder: Path,
         households.to_csv(str(output_folder / datasets.output_households_full_csv.file_name), index=False)
 
         households = drop_obsolete_columns(households, entities.household_columns)
+        if gaf is not None:
+            gaf = drop_obsolete_columns(gaf.reset_index(), entities.household_columns)
+            households = pd.concat((households, gaf))
+
         households.to_csv(str(output_folder / datasets.output_households_csv.file_name), index=False)
 
     return population, households
