@@ -59,7 +59,7 @@ def to_age_groups(young, middle, elderly):
 
 
 class Gender(Enum):
-    NOT_SET = -1
+    NOT_SET = np.nan
     MALE = 0
     FEMALE = 1
 
@@ -67,10 +67,13 @@ class Gender(Enum):
 GENDERS = [Gender.FEMALE, Gender.MALE]
 
 
-def gender_from_string(string):
-    if string == 'M':
+def gender_from_string(string) -> Gender:
+    if not isinstance(string, str):
+        return Gender.NOT_SET
+    string = string.upper()
+    if string in ('M', 'MĘŻCZYZNA'):
         return Gender.MALE
-    elif string == 'F':
+    elif string in ('F', 'K', 'KOBIETA'):
         return Gender.FEMALE
     raise ValueError('Unknown gender {}'.format(string))
 

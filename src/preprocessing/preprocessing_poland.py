@@ -290,8 +290,9 @@ def voivodship_to_symbol(voivodship: str):
         'zachodniopomorskie': 'Z'}
     return voivodship_dict.get(voivodship)
 
-    if __name__ == '__main__':
-        project_dir = Path(__file__).resolve().parents[2]
+
+if __name__ == '__main__':
+    project_dir = Path(__file__).resolve().parents[2]
     city_folder = project_dir / 'data' / 'processed' / 'poland' / 'WW'
     prepare_family_structure_from_voivodship(city_folder)
     generate_generations_configuration(city_folder)
