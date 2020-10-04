@@ -2,9 +2,10 @@ import random
 from typing import List, Dict
 
 import pandas as pd
+import numpy as np
 
 from src.data import entities as en
-from src.data.datasets import job_market_xlsx, employment_rate_by_age_csv
+from src.data.datasets import job_market_xlsx, employment_rate_by_age_csv, group_accommodation_facilities_personnel_csv
 from src.features import FeatureParams, Feature
 
 
@@ -21,6 +22,7 @@ class Employment(Feature):
     working_age_classes = [young_adults_class, middle_aged_class, middle_aged_immobile_class]
     males_col = 'males'
     females_col = 'females'
+    gaf_headcount_col = 'headcount'
 
     def _assign_workplace_genderwise(self, job_market_share, people: Dict[int, List[int]],
                                      employment_status: pd.Series, industrial_section: pd.Series,
@@ -44,8 +46,14 @@ class Employment(Feature):
         :return: dictionary of shuffled people per age group and the number of children
         """
         age_bins = [0, 15, 25, 55, 65, 100]
-        result = pd.cut(population.loc[(population[en.prop_gender] == gender.value), en.prop_age], right=False,
-                        bins=age_bins, labels=False)
+
+        try:
+            result = pd.cut(population.loc[(population[en.prop_gender] == gender.value)
+                                           & (population[en.prop_gaf_type].isna()), en.prop_age],
+                            right=False, bins=age_bins, labels=False)
+        except KeyError:
+            result = pd.cut(population.loc[(population[en.prop_gender] == gender.value), en.prop_age],
+                            right=False, bins=age_bins, labels=False)
         people_by_age = {}
         for age_class in self.working_age_classes:
             people_by_age[age_class] = result[result == age_class].index.tolist()
@@ -86,11 +94,23 @@ class Employment(Feature):
         # round and cast to int
         return pd.DataFrame(data=job_market_per_age_group).set_index('id').round().astype(int)
 
+    def _assign_employees_to_gafs(self, params, gaf_houses, is_healthcare, gaf_employee):
+        df = pd.read_csv(str(params.data_folder / group_accommodation_facilities_personnel_csv.file_name))
+        healhcare_index = list(is_healthcare[is_healthcare == en.HealthCare.YES.value].index)
+        random.shuffle(healhcare_index)
+        for idx, gaf in gaf_houses.iterrows():
+            # facility_type_id,facility_type_name,employees_per_resident
+            employees_per_resident = df.loc[df.facility_type_id == gaf[en.prop_gaf_type], 'employees_per_resident'].iloc[0]
+            personnel_count = int(np.max((1, np.round(gaf[self.gaf_headcount_col] * employees_per_resident))))
+            for i in range(personnel_count):
+                employee_idx = healhcare_index.pop()
+                gaf_employee.iat[employee_idx] = gaf[en.prop_household]
+
     def generate(self, params: EmploymentParams, population: pd.DataFrame) -> pd.DataFrame:
         employment_status = pd.Series(index=population.index, data=en.EmploymentStatus.NOT_EMPLOYED.value)
         industrial_section = pd.Series(index=population.index, data='')
         is_healthcare = pd.Series(index=population.index, data=en.HealthCare.NO.value)
-        company_size = pd.Series(index=population.index, data=0)
+        gaf_employee = pd.Series(index=population.index, data=en.GAF_EMPLOYEE_NOT_ASSIGNED)
 
         # shuffle people in the population
         females_by_age = self._split_shuffle_population_by_age(population, en.Gender.FEMALE)
@@ -115,8 +135,17 @@ class Employment(Feature):
                                           is_healthcare)
         self._assign_workplace_genderwise(males_job_market, males_by_age, employment_status, industrial_section,
                                           is_healthcare)
+        # allocate employees to gaf's
+        try:
+            gaf_houses = population[~population[en.prop_gaf_type].isna()]\
+                .groupby(by=[en.prop_household, en.prop_gaf_type]).size().reset_index()\
+                .rename(columns={0: self.gaf_headcount_col})
+            self._assign_employees_to_gafs(params, gaf_houses, is_healthcare, gaf_employee)
+        except KeyError:
+            pass
 
         population[en.prop_employment_status] = employment_status
         population[en.prop_industrial_section] = industrial_section
         population[en.prop_ishealthcare] = is_healthcare
+        population[en.prop_gaf_employee] = gaf_employee
         return population

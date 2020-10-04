@@ -4,9 +4,10 @@ from unittest import TestCase
 import numpy as np
 import pandas as pd
 import re
+from shutil import copy
 
 from src.data import datasets, entities
-from src.features import SocialCompetenceParams, SocialCompetence
+from src.features import SocialCompetenceParams, SocialCompetence, EmploymentParams, Employment
 from src.generation import population_generator_for_cities as gen
 
 
@@ -121,7 +122,9 @@ class TestGenerateHouseholds(TestCase):
         cls.resources_dir = Path(__file__).resolve().parents[0] / 'resources'
         cls.output_dir = Path(__file__).resolve().parents[0] / 'output'
         cls.population_size = 1780
-        cls.households = gen.generate_households(cls.resources_dir, cls.output_dir, cls.population_size)
+        cls.start_index = 10
+        cls.households = gen.generate_households(cls.resources_dir, cls.output_dir, cls.population_size,
+                                                 cls.start_index)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -149,4 +152,56 @@ class TestGenerateHouseholds(TestCase):
                                           + self.households['elderly']
         self.assertEqual(0,
                          len(self.households[self.households['sanity_check'] > self.households['household_headcount']]))
+
+    def test_indexing_starts_with_given_index(self):
+        self.assertEqual(self.start_index, self.households[entities.h_prop_household_index].min())
+
+
+class TestGroupAccommodationFacilities(TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        parent_dir = Path(__file__).resolve().parents[0]
+        cls.resources_dir = parent_dir / 'resources'
+        cls.resources_optional_dir = parent_dir / 'resources_optional'
+        cls.output_dir = parent_dir / 'output'
+        cls.clean_up() # in case last execution failed
+        copy(cls.resources_optional_dir / datasets.social_care_houses_csv.file_name, cls.resources_dir)
+        other_features = [(Employment(), EmploymentParams(cls.resources_dir))]
+        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, other_features)
+
+    @classmethod
+    def clean_up(cls) -> None:
+        if (cls.resources_dir / datasets.output_households_basic_feather.file_name).is_file():
+            (cls.resources_dir / datasets.output_households_basic_feather.file_name).unlink()
+        if (cls.resources_dir / datasets.social_care_houses_csv.file_name).is_file():
+            (cls.resources_dir / datasets.social_care_houses_csv.file_name).unlink()
+        for file in cls.output_dir.iterdir():
+            if file.name != '.gitkeep':
+                file.unlink()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.clean_up()
+
+    def test_people_assigned_to_gaf_with_multiple_age_groups(self):
+        last_but_one_index = self.households[entities.h_prop_household_index].nlargest(2).iloc[1]
+        gaf_inhabitants = self.population[self.population[entities.prop_household] == last_but_one_index]
+        self.assertEqual(72, len(gaf_inhabitants.index))
+
+    def test_people_assigned_to_gaf_with_single_age_group(self):
+        last_index = self.households[entities.h_prop_household_index].nlargest(1).iloc[0]
+        gaf_inhabitants = self.population[self.population[entities.prop_household] == last_index]
+        self.assertEqual(15, len(gaf_inhabitants.index))
+
+    def test_gaf_type_set(self):
+        gaf_indices = self.households[entities.h_prop_household_index].nlargest(2).index.tolist()
+        gaf_inhabitants = self.population[self.population[entities.prop_household].isin(gaf_indices)]
+        expected_value = entities.GroupAccommodationFacility.SocialCareHouse.value * len(gaf_inhabitants.index)
+        self.assertEqual(expected_value, (~gaf_inhabitants[entities.prop_gaf_type].isna()).sum())
+
+    def test_gaf_not_employed(self):
+        employment = self.population.loc[~self.population[entities.prop_gaf_type].isna(),
+                                         entities.prop_employment_status]
+        self.assertEqual(0, employment.sum())
+
 

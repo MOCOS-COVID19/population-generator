@@ -19,7 +19,6 @@ class TestEmployment(TestCase):
         self.population = age_range_to_age(self.population)
 
     def test_employment(self):
-        population_size = len(self.population.index)
         population = Employment().generate(EmploymentParams(self.data_folder), self.population)
         population_columns = population.columns.tolist()
         self.assertIn(prop_industrial_section, population_columns)

@@ -1,11 +1,8 @@
-import networkx as nx
 from src.data import entities
 from unittest import TestCase
-
+import numpy as np
 
 class TestNodes(TestCase):
-    def setUp(self):
-        self.G = nx.Graph()
 
     def test_basic_node_with_idx(self):
         idx = 1
@@ -27,7 +24,7 @@ class TestNodes(TestCase):
         gender = entities.Gender.MALE
         node = entities.BasicNode(idx)
 
-        self.assertEqual(entities.Gender.NOT_SET.value, node.gender)
+        self.assertTrue(np.isnan(node.gender))
 
         node.gender = gender
         self.assertEqual(gender.value, node.gender)
@@ -80,3 +77,18 @@ class TestNodes(TestCase):
         self.assertEqual(new_household, node.household)
 
 
+class TestAgeGroups(TestCase):
+    def test_young(self):
+        expected = entities.AgeGroup.young
+        acutal = entities.to_age_group(1, 0, 0)
+        self.assertEqual(expected, acutal)
+
+    def test_middle(self):
+        expected = entities.AgeGroup.middle
+        acutal = entities.to_age_group(0, 1, 0)
+        self.assertEqual(expected, acutal)
+
+    def test_elderly(self):
+        expected = entities.AgeGroup.elderly
+        acutal = entities.to_age_group(0, 0, 1)
+        self.assertEqual(expected, acutal)

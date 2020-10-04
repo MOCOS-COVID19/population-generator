@@ -1,8 +1,10 @@
-from unittest import TestCase
-from src.generation import population_generator_for_cities as population
-from src.data import datasets, entities
-import pandas as pd
 from pathlib import Path
+from unittest import TestCase
+
+import pandas as pd
+
+from src.data import datasets
+from src.generation import population_generator_for_cities as population
 
 
 class TestNarrowHousemastersByAgeAndFamilyStructure(TestCase):
@@ -23,37 +25,4 @@ class TestNarrowHousemastersByAgeAndFamilyStructure(TestCase):
         for i, row in self.households_rows.iterrows():
             masters = population.narrow_housemasters_by_headcount_and_age_group(self.household_by_master, row)
             self.assertGreaterEqual(len(masters.index), 0)
-
-
-class TestEmployment(TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        project_dir = Path(__file__).resolve().parents[2]
-        cls.data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
-        age_gender_df = pd.read_excel(str(cls.data_folder / datasets.age_gender_xlsx.file_name),
-                                      sheet_name=datasets.age_gender_xlsx.sheet_name)
-        cls.pop = population.age_gender_population(age_gender_df)
-        cls.population_size = len(cls.pop.index)
-
-    def test_generate_employment(self):
-        employment = population.generate_employment(self.data_folder, self.pop)
-        self.assertEqual(len(employment.index), self.population_size)
-
-
-class TestPublicTransport(TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        project_dir = Path(__file__).resolve().parents[2]
-        cls.data_folder = project_dir / 'data' / 'processed' / 'poland' / 'DW'
-        age_gender_df = pd.read_excel(str(cls.data_folder / datasets.age_gender_xlsx.file_name),
-                                      sheet_name=datasets.age_gender_xlsx.sheet_name)
-        cls.pop = population.age_gender_population(age_gender_df)
-        cls.population_size = len(cls.pop.index)
-
-    def test_generate_public_transport(self):
-        self.pop[entities.prop_public_transport_usage] = population.generate_public_transport_usage(self.population_size)
-        duration = population.generate_public_transport_duration(self.pop[entities.prop_public_transport_usage])
-        self.assertEqual(len(duration.index), self.population_size)
-
-
 

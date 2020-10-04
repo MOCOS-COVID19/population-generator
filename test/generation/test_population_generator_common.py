@@ -41,9 +41,9 @@ class TestNodesToDataFrame(TestCase):
         df = population.nodes_to_dataframe(nodes)
 
         self.assertIsInstance(df, pd.DataFrame)
-        self.assertEqual(len(entities.columns) + 1, len(df.columns))  # age_generation is not in a final dataframe
+        self.assertEqual(len(entities.person_columns) + 1, len(df.columns))  # age_generation is not in a final dataframe
         self.assertEqual(2, len(df.index))
-        for col in entities.columns:
+        for col in entities.person_columns:
             self.assertIn(col, df.columns.tolist())
 
         self.assertNodeAndRowEqual(node1, df.iloc[0])
