@@ -7,7 +7,7 @@ import re
 from shutil import copy
 
 from src.data import datasets, entities
-from src.features import SocialCompetenceParams, SocialCompetence
+from src.features import SocialCompetenceParams, SocialCompetence, EmploymentParams, Employment
 from src.generation import population_generator_for_cities as gen
 
 
@@ -164,11 +164,13 @@ class TestGroupAccommodationFacilities(TestCase):
         cls.resources_dir = parent_dir / 'resources'
         cls.resources_optional_dir = parent_dir / 'resources_optional'
         cls.output_dir = parent_dir / 'output'
+        cls.clean_up() # in case last execution failed
         copy(cls.resources_optional_dir / datasets.social_care_houses_csv.file_name, cls.resources_dir)
-        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, None)
+        other_features = [(Employment(), EmploymentParams(cls.resources_dir))]
+        cls.population, cls.households = gen.generate_population(cls.resources_dir, cls.output_dir, other_features)
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def clean_up(cls) -> None:
         if (cls.resources_dir / datasets.output_households_basic_feather.file_name).is_file():
             (cls.resources_dir / datasets.output_households_basic_feather.file_name).unlink()
         if (cls.resources_dir / datasets.social_care_houses_csv.file_name).is_file():
@@ -176,6 +178,10 @@ class TestGroupAccommodationFacilities(TestCase):
         for file in cls.output_dir.iterdir():
             if file.name != '.gitkeep':
                 file.unlink()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.clean_up()
 
     def test_people_assigned_to_gaf_with_multiple_age_groups(self):
         last_but_one_index = self.households[entities.h_prop_household_index].nlargest(2).iloc[1]
@@ -191,6 +197,11 @@ class TestGroupAccommodationFacilities(TestCase):
         gaf_indices = self.households[entities.h_prop_household_index].nlargest(2).index.tolist()
         gaf_inhabitants = self.population[self.population[entities.prop_household].isin(gaf_indices)]
         expected_value = entities.GroupAccommodationFacility.SocialCareHouse.value * len(gaf_inhabitants.index)
-        self.assertEqual(expected_value, gaf_inhabitants[entities.prop_gaf_type].sum())
+        self.assertEqual(expected_value, (~gaf_inhabitants[entities.prop_gaf_type].isna()).sum())
+
+    def test_gaf_not_employed(self):
+        employment = self.population.loc[~self.population[entities.prop_gaf_type].isna(),
+                                         entities.prop_employment_status]
+        self.assertEqual(0, employment.sum())
 
 

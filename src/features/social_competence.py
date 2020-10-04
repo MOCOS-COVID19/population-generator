@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from src.data.entities import prop_social_competence
+from src.data.entities import prop_social_competence, prop_gaf_type
 from src.features.base import Feature, FeatureParams
 from src.generation.population_generator_common import (sample_from_distribution)
 
@@ -35,4 +35,9 @@ class SocialCompetence(Feature):
         x = sample_from_distribution(len(population.index), params.distribution_name, loc=params.loc,
                                      scale=params.scale)
         population[prop_social_competence] = np.clip(x, 0, 1).reshape(-1, 1)
+
+        try:
+            population.loc[~population[prop_gaf_type].isna(), prop_social_competence] = 0
+        except KeyError:
+            pass
         return population

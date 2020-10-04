@@ -287,7 +287,6 @@ def assign_people_to_gafs(gaf, gaf_type, gaf_first_index, population, homeless_i
     gaf[entities.h_prop_inhabitants] = '[]'
     gaf = gaf.set_index(entities.h_prop_household_index)
 
-    gaf_prop_inhabitants_idx = gaf.columns.get_loc(entities.h_prop_inhabitants)
     population_prop_gaf_type_idx = population.columns.get_loc(entities.prop_gaf_type)
     population_prop_household_idx = population.columns.get_loc(entities.prop_household)
 
@@ -298,10 +297,11 @@ def assign_people_to_gafs(gaf, gaf_type, gaf_first_index, population, homeless_i
         for age_group in age_groups_permuted:
             homeless_idx = homeless_indices[age_group.name].pop()
             population.iat[homeless_idx, population_prop_household_idx] = facility_idx
-            population.iat[homeless_idx, population_prop_gaf_type_idx] = gaf_type
+            population.iat[homeless_idx, population_prop_gaf_type_idx] = facility.facility_type_id
             inhabitants.append(homeless_idx)
 
-        gaf.loc[facility_idx].iat[gaf_prop_inhabitants_idx] = str(inhabitants)
+        gaf.loc[facility_idx, entities.h_prop_inhabitants] = str(inhabitants)
+    return gaf
 
 
 def generate_population(data_folder: Path, output_folder: Path,
@@ -325,7 +325,7 @@ def generate_population(data_folder: Path, output_folder: Path,
     # population size
     population_size = len(population.index)
 
-    # initial household assignemtn
+    # initial household assignment
     population[entities.prop_household] = entities.HOUSEHOLD_NOT_ASSIGNED
 
     # initial group accommodation facility assignment
@@ -364,7 +364,7 @@ def generate_population(data_folder: Path, output_folder: Path,
 
     if gaf is not None:
         gaf_first_index = households[entities.h_prop_household_index].max() + 1
-        assign_people_to_gafs(gaf, entities.GroupAccommodationFacility.SocialCareHouse.value,
+        gaf = assign_people_to_gafs(gaf, entities.GroupAccommodationFacility.SocialCareHouse.value,
                               gaf_first_index, population, _homeless_indices)
 
     logging.info('Selecting households with housemasters and headcount greater than 1...')

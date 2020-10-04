@@ -14,7 +14,7 @@ prop_public_transport_duration = 'public_transport_duration'
 prop_household = 'household_index'
 prop_industrial_section = 'industrial_section'
 prop_ishealthcare = 'ishealthcare'
-prop_gaf_type = 'gaf_type'
+prop_gaf_type = 'gaf_type_id'
 prop_gaf_employee = 'gaf_employee'
 
 # auxiliary for an individual
@@ -261,7 +261,7 @@ class Node(BasicNode):
             :param age_generation: (optional) age_generation of an individual
             :return: None
         """
-        super().__init__(0, age, gender, household, age_generation, gaf_type, social_competence)
+        super().__init__(0, age, gender, household, age_generation, social_competence, gaf_type)
         self[prop_employment_status] = employment_status.value
         self[prop_public_transport_usage] = public_transport_usage
         self[prop_public_transport_duration] = public_transport_duration
